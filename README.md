@@ -51,18 +51,8 @@ An example parameter file is shown at [the example parameter file alfven.par](ex
 Note that for the parameter file to be correctly detected, it needs to be in the working directory, and named **echo.par**.
 
 
-## References
-
-* TODO: Insert a reference to the PUM article here!
-
-## Authors
-(in alphabetical order)
-* **Fabio Baruffa**
-* **Matteo Bugli**
-* **Salvatore Cielo**
-* **Luca Del Zanna**
-* **Luigi Iapichino**
-* **Alexander Pöppl**
+## References & Authors
+See `Cite this repository` panel.
 
 ## License
 
