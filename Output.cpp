@@ -78,10 +78,10 @@ namespace output {
 
     Log->setPar(false);
     FILE *fp = fopen(datName.str().c_str(), "wb"); // For datafiles
-    if(problem.out[0] == nullptr){
+    if(problem.out[0] != nullptr){
       for (int ii = 0; ii < Ntot; ++ii){
         for(int iVar = 0; iVar<FLD_TOT; ++iVar){
-          fwrite((void *) (&problem.out[iVar*Ntot+ii]), sizeof(field), 1, fp);
+          fwrite((void *) (&(problem.out[iVar][ii])), sizeof(field), 1, fp);
         }
       }
     }
