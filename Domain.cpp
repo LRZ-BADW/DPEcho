@@ -100,10 +100,10 @@ void Domain::cartInfo() {
   int neighCoords_[3];
   for (int i = 0; i < 3; ++i){
     *Log+10<<TAG <<"Prev / This / Next ["<<i<<"]" ;
-    MPI_Cart_coords(cartComm_, neighRankPrev_[i], 3, neighCoords_+i);
+    MPI_Cart_coords(cartComm_, neighRankPrev_[i], 3, neighCoords_);
     *Log<<"("<< neighCoords_   [0] <<" "<< neighCoords_   [1] <<" "<< neighCoords_   [2] <<") ";
     *Log<<"("<< cartCoords_    [0] <<" "<< cartCoords_    [1] <<" "<< cartCoords_    [2] <<") ";
-    MPI_Cart_coords(cartComm_, neighRankNext_[i], 3, neighCoords_+i);
+    MPI_Cart_coords(cartComm_, neighRankNext_[i], 3, neighCoords_);
     *Log<<"("<< neighCoords_   [0] <<" "<< neighCoords_   [1] <<" "<< neighCoords_   [2] <<") ";
     Log->fl();
   }
