@@ -54,6 +54,8 @@ Note that for the parameter file to be correctly detected, it needs to be in the
 ## References & Authors
 See `Cite this repository` panel.
 
+[![DOI](https://zenodo.org/badge/554711124.svg)](https://zenodo.org/badge/latestdoi/554711124)
+
 ## License
 
 This project is licensed under Apache License version 2.0 - see the [LICENSE.md](LICENSE.md) file for details
