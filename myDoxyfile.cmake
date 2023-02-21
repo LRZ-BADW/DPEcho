@@ -11,7 +11,7 @@
 # settings run `doxygen myDoxifile.cmake` - SC -
 
 DOXYFILE_ENCODING      = UTF-8
-PROJECT_NAME           = "echo"
+PROJECT_NAME           = "DPEcho"
 PROJECT_NUMBER         =
 PROJECT_BRIEF          =
 PROJECT_LOGO           =

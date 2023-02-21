@@ -13,17 +13,54 @@
 #include <sstream>
 
 DeviceConfig::DeviceConfig() {
-  for (auto const &p : mysycl::platform::get_platforms()) {
-    for (auto dev : p.get_devices()) {
+  for (auto const &p : mysycl::platform::get_platforms())
+    for ( auto dev : p.get_devices() )
       devices.push_back(dev);
-    }
+}
+
+device DeviceConfig::deviceWith(int id){
+  Logger *log = Logger::getInstance(); log->setPar(true);
+  device temp;
+  if( (id>=0) && (id<devices.size()) ){
+    ((*log)+2)<<TAG <<"Looking at device #"<<id; log->fl();
+    temp = devices[id];
+  }else{
+    ((*log)+2)<<TAG <<"Looking at DPEcho default device."; log->fl();
+    listDevices();
+#if   SYCL==oneAPI || SYCL==LLVM
+#if   DEVICE==DEV_CPU
+    temp = mysycl::device(mysycl::cpu_selector_v); // mysycl::cpu_selector_v         fallBackSel;
+#elif DEVICE==DEV_GPU
+    temp = mysycl::device(mysycl::gpu_selector_v); // mysycl::gpu_selector_v         fallBackSel;
+#elif DEVICE==DEV_ACC
+    temp = mysycl::device(mysycl::accelerator_selector_v); // mysycl::accelerator_selector_v fallBackSel;
+#elif DEVICE==DEV_FPGA
+    temp = mysycl::device(mysycl::accelerator_selector_v); //    mysycl::accelerator_selector_v fallBackSel;
+#else // host is deprecated in SYCL2020
+    temp = mysycl::device(mysycl::default_selector_v); //    mysycl::default_selector_v     fallBackSel;
+#endif
+#else
+#if   DEVICE==DEV_CPU
+    mysycl::cpu_selector         fallBackSel;
+#elif DEVICE==DEV_GPU
+    mysycl::gpu_selector         fallBackSel;
+#elif DEVICE==DEV_ACC
+    mysycl::accelerator_selector fallBackSel;
+#elif DEVICE==DEV_FPGA
+    mysycl::accelerator_selector fallBackSel;
+#else // host is deprecated in SYCL2020
+    mysycl::default_selector     fallBackSel;
+#endif
+    temp = mysycl::device(fallBackSel);
+#endif
   }
+  printTargetInfo(temp);
+  return temp;
 }
 
 void DeviceConfig::listDevices() {
-  Logger *log = Logger::getInstance();
-  log->setPar(true);
-  ((*log) + 2) << TAG <<"\n\t# SYCL devices:\t" << devices.size() ;
+  Logger *log = Logger::getInstance(); log->setPar(false);
+  ((*log) + 2) << TAG <<"\n\t# Available SYCL devices:\t" << devices.size() ;
   for (size_t i = 0; i < devices.size(); i++) {
     bool hasDpSupport = devices[i].has(aspect::fp64);
     (*log) <<"\n\t- Device #" << i << ":\t"
@@ -64,19 +101,17 @@ device DeviceConfig::debugDevice() {
   throw std::runtime_error("No debug device is available on this machine!");
 }
 
-void  DeviceConfig::printTargetInfo ( mysycl::queue q) {
-  Logger *Log = Logger::getInstance(); Log->setPar(false);
-  auto dev = q.get_device();
+void  DeviceConfig::printTargetInfo(device dev) {
+  Logger *Log = Logger::getInstance(); Log->setPar(true);
   *Log+0<<TAG
-        << "\n\tHardware "   << dev.get_info<info::device::name>() << " is " << (dev.is_host()? "HOST ":"")
+        << "\n\tHardware "   << dev.get_info<info::device::name>() // << " is " << (dev.is_host()? "HOST ":"")
         << (dev.is_cpu()? "CPU ":"") << (dev.is_gpu()? "GPU ":"") << (dev.is_accelerator()? " ACCELERATOR ":"")
-        << "\n\tMax Compute Units  : " << dev.get_info<info::device::max_compute_units>  ();
-#if SYCL <= ONEAPI
+        << "\n\tMax Compute Units  : " << dev.get_info<info::device::max_compute_units>  ();   Log->fl();
+#if SYCL<=oneAPI
   *Log+0<< "\n\tMax Work Group Size: " << dev.get_info<info::device::max_work_group_size>()
         << "\n\tGlobal Memory / GB : " << dev.get_info<info::device::global_mem_size>    ()/pow(1024.0, 3)
-        << "\n\tLocal  Memory / kB : " << dev.get_info<info::device::local_mem_size>     ()/1024.0      ;
+        << "\n\tLocal  Memory / kB : " << dev.get_info<info::device::local_mem_size>     ()/1024.0      ;  Log->fl();
 #else
-  Log->fl();
   *Log+18<<"\n\tMax Work Group Size, Global and Local Memory queries are handled differently outside oneAPI.";
 #endif
   Log->fl();

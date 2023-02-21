@@ -14,13 +14,13 @@
 
 using namespace std;
 
-Problem::Problem(mysycl::queue qx, Grid *grid, Domain *D, field_array &fld ){
+Problem::Problem(mysycl::queue qx, string &confFile, Grid *grid, Domain *D, field_array &fld ){
   Log = Logger::getInstance(); grid_ = grid; D_ = D; N_ = grid_->nht;
   iOut_ = 0; iStep_ = 0; nStep_ = 0;  dumpHalos = false; locSize = 1;
   tMax_   = 1.0; dt_ = 0.0; t_ = 0.0, tOut_=0.025, cfl_ = 0.8/3.0; // Divide by 3 as it's 3D
   qq = qx;
   stepTime_.init();
-  std::ifstream inFile("echo.par");   std::string key, val;
+  std::ifstream inFile(confFile);   std::string key, val;
   Log->setPar(false); *Log+3<<TAG<<"Reading input: ";
   while (std::getline(inFile, key, ' ') && std::getline(inFile, val)){
     if(!key.compare("tMax" )){ tMax_  = static_cast<field>(stod(val)); *Log<<"\n\ttMax  "<<tMax_  ; continue;}
@@ -63,7 +63,7 @@ void Problem::dump(field_array &v){ // Asynchronous output
   } else {  // Manual indexing necessary
     field *vt[FLD_TOT]; for (int i = 0; i < FLD_TOT; i++) vt[i] = v[i];
     field *outt[FLD_TOT]; for (int i = 0; i < FLD_TOT; i++) outt[i] = out[i];
-    qq.parallel_for(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
+    qq.parallel_for<class parForDump>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
       auto iOut= it.get_linear_id(); // Output array has NH halo scope here
       auto iV  = globLinId(it.get_id(), gr.nh, gr.h); // v has WH indexing; offset by halos
       for(int iVar=0; iVar<FLD_TOT; ++iVar)
@@ -83,7 +83,7 @@ void Problem::dump(field_array &v){ // Asynchronous output
 
 void Problem::InitConstWH(field *v, field val) { // HOST CODE: kernel for initialization.
   if(!v){ Log->Error("%s Array was not initialized.", TAG); return; }
-  qq.parallel_for(range<3>(grid_->nh[0], grid_->nh[1], grid_->nh[2]), [=, gr = *(this->grid_)](item<3> it) {
+  qq.parallel_for<class parForInitConstWH>(range<3>(grid_->nh[0], grid_->nh[1], grid_->nh[2]), [=, gr = *(this->grid_)](item<3> it) {
     int offset[3] = {0,0,0};
     auto iV  = globLinId(it, gr.nh, offset); // v has WH indexing; offset by halos
     v[iV] = val;
@@ -92,7 +92,7 @@ void Problem::InitConstWH(field *v, field val) { // HOST CODE: kernel for initia
 
 void Problem::InitConstNH(field *v, field val) { // HOST CODE: kernel for initialization.
   if(!v){ Log->Error("%s Array was not initialized.", TAG); return; }
-  qq.parallel_for(range<3>(grid_->n[0], grid_->n[1], grid_->n[2]), [=, gr = *(this->grid_)](item<3> it) {
+  qq.parallel_for<class parForInitConstNH>(range<3>(grid_->n[0], grid_->n[1], grid_->n[2]), [=, gr = *(this->grid_)](item<3> it) {
     auto iV  = globLinId(it, gr.nh, gr.h); // v has WH indexing; offset by halos
     v[iV] = val;
   });
@@ -147,7 +147,7 @@ void Problem::Alfven(field_array &v, field_array &u){ // HOST CODE: Initializing
   //-- Device code
   field bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
   Grid gr = *grid_; // For ease of lambda capture
-  qq.parallel_for(range(gr.n[0], gr.n[1], gr.n[2]), [=, NN=N_](item<3> it) {
+  qq.parallel_for<class parForProblemAlfven>(range(gr.n[0], gr.n[1], gr.n[2]), [=, NN=N_](item<3> it) {
     field phi = 0.0, bx, by, bz, vx, vy, vz;
     auto i = globLinId(it, gr.nh, gr.h); // Addressing fld: WH indexing
 

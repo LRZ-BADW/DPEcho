@@ -15,18 +15,12 @@
 #define oneAPIold 0
 #define oneAPI    1
 #define LLVM      2
-#define hipSYCL   3
+#define OpenSYCL  3
 
-#if   SYCL == hipSYCL
+#if   SYCL == OpenSYCL
 namespace mysycl = hipsycl::sycl;
 namespace my1api = hipsycl::sycl;
 #define SYCL_EXTERNAL // Not needed but interfaces must be made uniform
-#elif SYCL == LLVM
-namespace mysycl = cl::sycl;
-namespace my1api = cl::sycl::ext::oneapi;
-#elif SYCL == oneAPIold
-namespace mysycl = cl::sycl;
-namespace my1api = cl::sycl::ONEAPI;
 #else
 namespace mysycl = cl::sycl;
 namespace my1api = cl::sycl::ext::oneapi;
@@ -35,7 +29,13 @@ namespace my1api = cl::sycl::ext::oneapi;
 using namespace mysycl;
 using namespace my1api;
 
-//-- To use prinft within device code
+//- Device  Selection
+#define DEV_DEF  0
+#define DEV_CPU  1
+#define DEV_GPU  2
+#define DEV_ACC  3
+
+//-- To use printf within device code
 #ifdef __SYCL_DEVICE_ONLY__
   #define CONSTANT __attribute__((opencl_constant))
 #else

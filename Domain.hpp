@@ -21,8 +21,6 @@ class Domain {
   private:
     Logger *Log;
     mysycl::queue qq;  field *bufL, *bufR; // Tools for the BCex
-    // Most of the following could be public const and save us the functions below
-    // IF we pass values from constructor instead of reading echo.par in there.
     int cartDims_[3], cartPeriodic_[3], cartCoords_[3], bcType_[3];
     field boxMin_[3], boxMax_[3], boxSize_[3]; // Global info, physical
     field locMin_[3], locMax_[3], locSize_[3]; // This rank info, physical

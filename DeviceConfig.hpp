@@ -17,16 +17,16 @@
 
 struct DeviceConfig {
   private:
-  std::vector<device> devices;
+    std::vector<device> devices;
 
   public:
-  DeviceConfig();
-  void printTargetInfo(mysycl::queue);
-  void listDevices();
-  device deviceWith(int id);
-  device debugDevice();
-  std::vector<device> gpus();
-  std::vector<device> cpus();
+    DeviceConfig();
+    void printTargetInfo(mysycl::device);
+    void listDevices();
+    device deviceWith(int imd);
+    device debugDevice();
+    std::vector<device> gpus();
+    std::vector<device> cpus();
 };
 
 #endif

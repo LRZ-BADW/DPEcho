@@ -117,11 +117,6 @@ SYCL_EXTERNAL void cons2prim(id<1> myId, unsigned n, field_array u, field_array 
 //-- Fluxes and characteristic velocities.
 //    IMPORTANT: all local quantities, they have been sampled --> access simply by eg. f[VX]
 void physicalFlux(int dir, Metric &g, field vD[FLD_TOT], field uD[FLD_TOT], field f[FLD_TOT], field vf[2], field vt[2] ){
-
-  static const CONSTANT char FMTA[] = "%s: %lf %lf %lf %lf %lf %lf %lf %lf %lf \n";
-  static const CONSTANT char FMTV[] = "%s: %lf %lf %lf\n";
-  static const CONSTANT char FMTF[] = "%s: %lf \n";
-
   field alpha = g.alpha(), betai[3], gCov[9], gCon[9];
   g.beta(betai);
   g.g3DCov(gCov);

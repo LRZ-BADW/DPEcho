@@ -29,28 +29,59 @@ set(MYBUILDTYPE Release Debug RelWithDebInfo MinSizeRel)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build")
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${MYBUILDTYPE})
 
-# Unfortunately, there is no proper support of SyCL in CMake as of now.
+# Unfortunately, there is no proper support of SYCL in CMake as of now.
 # Compilation without passing any environment variables was given as a
 # requirement, hence, we set the compiler here directly (CMake discourages this).
 set(SYCL oneAPI CACHE STRING "Select the SYCL target architecture")
-set(MYSYCL oneAPI oneAPIold LLVM hipSYCL)
+set(MYSYCL oneAPI oneAPIold LLVM OpenSYCL)
 set_property(CACHE SYCL PROPERTY STRINGS ${MYSYCL})
 target_compile_definitions(echo PRIVATE SYCL=${SYCL})
-# TODO: So far the only target for LLVM is NVIDIA, and for hipSYCL omp/cpu. Add the others!
-if (SYCL STREQUAL LLVM)
-  set(CMAKE_CXX_COMPILER "clang++")
-  message(STATUS "Configuring Echo with LLVM (NVIDIA) Toolchain")
-  target_compile_options(echo PUBLIC -fsycl -fsycl-targets=nvptx64-nvidia-cuda)
-  target_link_options   (echo PUBLIC -fsycl -fsycl-targets=nvptx64-nvidia-cuda)
-  message(STATUS "Set device target to NVIDIA PTX64")
-elseif (SYCL STREQUAL hipSYCL )
+target_compile_options(echo PUBLIC -fsycl)
+target_link_options   (echo PUBLIC -fsycl)
+
+# A bit cumbersome to support all!
+if     (SYCL STREQUAL OpenSYCL )
   set(CMAKE_CXX_COMPILER "syclcc-clang")
-  message(STATUS "Configuring Echo with hipSycl Toolchain")
-else()
-  set(CMAKE_CXX_COMPILER "dpcpp")
-  message(STATUS "Configuring Echo with LLVM (Intel) Toolchain")
-  target_compile_options(echo PUBLIC -fsycl -fsycl-unnamed-lambda -xHost)
-  target_link_options   (echo PUBLIC -fsycl)
+  message(STATUS "Configuring Echo with OpenSycl Toolchain")
+elseif (SYCL STREQUAL LLVM)
+  set(CMAKE_CXX_COMPILER "clang++")
+  set(SYCL_LLVM_CHAIN Intel CACHE STRING "Intel/NVidia/AMD")
+  set(MYCHAIN AMD Intel NVidia)
+  set_property(CACHE SYCL_LLVM_CHAIN PROPERTY STRINGS ${MYCHAIN})
+  message(STATUS "Configuring Echo with LLVM (${SYCL_LLVM_CHAIN}) Toolchain")
+  if     (SYCL_LLVM_CHAIN STREQUAL AMD)
+    target_compile_options(echo PUBLIC -fsycl-targets=amdgcn-amd-amdhsa)
+    target_link_options   (echo PUBLIC -fsycl-targets=amdgcn-amd-amdhsa)
+    set(SYCL_LLVM_ARCH gfx90a CACHE STRING "Run sycl-ls when in doubt.")
+    set(MYOFFLOAD_ARCH gfx90a gfx908 gfx906)
+    set_property(CACHE SYCL_LLVM_ARCH PROPERTY STRINGS ${MYOFFLOAD_ARCH})
+    target_compile_options(echo PUBLIC -Xsycl-target-backend --offload-arch=${SYCL_LLVM_ARCH})
+    target_link_options   (echo PUBLIC -Xsycl-target-backend --offload-arch=${SYCL_LLVM_ARCH})
+    message(STATUS "Set device target to AMDGCN ${SYCL_LLVM_ARCH}")
+  elseif (SYCL_LLVM_CHAIN STREQUAL NVidia)
+    # Atm only AMD needs the arch. specified. Once needed for NVIDIA as well, do it here.
+    unset(SYCL_LLVM_ARCH  CACHE)
+    target_compile_options(echo PUBLIC -fsycl-targets=nvptx64-nvidia-cuda)
+    target_link_options   (echo PUBLIC -fsycl-targets=nvptx64-nvidia-cuda)
+    include(CheckLanguage)
+    check_language(CUDA)
+    if   (CMAKE_CUDA_COMPILER)
+      enable_language(CUDA)
+      target_compile_options(echo PUBLIC --cuda-path=${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../../..)
+      target_link_options   (echo PUBLIC --cuda-path=${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../../..)
+      #target_compile_options(echo PUBLIC --cuda-path=${CMAKE_CUDA_TOOLKIT_LIBRARY_ROOT})
+      #target_link_options   (echo PUBLIC --cuda-path=${CMAKE_CUDA_TOOLKIT_LIBRARY_ROOT})
+      message(STATUS "Added explicit CUDA language.")
+    else  ( )
+      message(WARNING "Explicit CUDA not found. With Codeplay NVidia plugin you should be fine. Otherwise...")
+    endif ( )
+    message(STATUS "Set device target to NVIDIA PTX64.")
+  endif  ( )
+else   ( )
+  unset(SYCL_LLVM_CHAIN CACHE)
+  unset(SYCL_LLVM_ARCH  CACHE)
+  set(CMAKE_CXX_COMPILER "icpx")
+  message(STATUS "Configuring Echo with oneAPI (Intel) Toolchain")
   message(STATUS "Set device target to SPIR-V Just-in-Time Compilation")
   #-- Stuff specific for oneAPI (for the moment)
   option(ENABLE_MPI "Compile with MPI besides DPC++" OFF)
@@ -96,16 +127,26 @@ else()
 endif()
 
 # -- DPC++ and Runtime
-option(GPU "Uses device selector rather than host" OFF)
-if(GPU)
-  set(SUFFIX "${SUFFIX}_gpu")
-  target_compile_definitions(echo PRIVATE GPU)
-endif(GPU)
+set(SYCL_DEVICE CPU CACHE STRING "Select the primary SYCL device (default/CPU/GPU/etc.). Overridden by forceDevice in echo.par")
+set(MYDEVICE DEF CPU GPU ACC FPGA)
+set_property(CACHE SYCL_DEVICE PROPERTY STRINGS ${MYDEVICE})
+target_compile_definitions(echo PRIVATE DEVICE=DEV_${SYCL_DEVICE})
+if(NOT SYCL_DEVICE STREQUAL DEF )
+  string(TOLOWER ${SYCL_DEVICE} DEVSUFFIX)
+  set(SUFFIX "${SUFFIX}_${DEVSUFFIX}")
+endif()
+# TODO: Should be done way better than this! Also a10sx and s10sx were options...
+if(SYCL_DEVICE STREQUAL FPGA )
+  message(WARNING "VERY experimental Intel FPGA workflow (probably not yet supported)!")
+  target_compile_options(echo PUBLIC -fsycl-link -fintelfpga -Xshardware -Xsboard-package=/glob/development-tools/oneapi/oneapi/intel_s10sx_pac -Xsboard=pac_s10_usm)
+  target_link_options   (echo PUBLIC -fsycl-link -fintelfpga -Xshardware -Xsboard-package=/glob/development-tools/oneapi/oneapi/intel_s10sx_pac -Xsboard=pac_s10_usm)
+endif()
 
+# -- Compiling
 try_compile(COMPILE_SUCCEEDED
-            ${CMAKE_BINARY_DIR}/check
-            SOURCES ${CMAKE_SOURCE_DIR}/cmake/checks/fscheck.cpp
-            CXX_STANDARD 17
+  ${CMAKE_BINARY_DIR}/check
+  SOURCES ${CMAKE_SOURCE_DIR}/cmake/checks/fscheck.cpp
+  CXX_STANDARD 17
 )
 if(COMPILE_SUCCEEDED)
   message(STATUS "C++ filesystem API available. Using that.")
@@ -116,15 +157,14 @@ endif()
 CHECK_INCLUDE_FILE_CXX("filesystem.h" FSH_FOUND)
 CHECK_INCLUDE_FILE_CXX(filesystem FS_FOUND)
 
-
 option(ENABLE_MEMORY_SANITATION "Enable memory sanitizer to find and track invalid memory accesses. Currently disabled." OFF)
-#if (ENABLE_MEMORY_SANITATION AND NOT GPU)
-#  message(STATUS "Memory sanitation enabled. Linking appropriate libraries.")
-#  target_compile_options(echo PUBLIC  -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -fsanitize-address-use-after-scope -Wuninitialized -g)
-#  target_link_libraries(echo PUBLIC  -fno-omit-frame-pointer -fsanitize=address -fsanitize=undefined -g)
-#elseif(ENABLE_MEMORY_SANITATION)
-#  message(WARNING "Memory sanitation is only available with disabled GPU for now.")
-#endif()
+if (ENABLE_MEMORY_SANITATION) # AND NOT GPU)
+  message(STATUS "Memory sanitation enabled. Linking appropriate libraries.")
+  target_compile_options(echo PUBLIC -fno-omit-frame-pointer -Wuninitialized -g) # -fsanitize=address -fsanitize=undefined   -fsanitize-address-use-after-scope
+  target_link_libraries (echo PUBLIC -fno-omit-frame-pointer -g) # -fsanitize=address -fsanitize=undefined
+elseif(ENABLE_MEMORY_SANITATION)
+  message(WARNING "Memory sanitation is only available with disabled GPU for now.")
+endif()
 
 option(SINGLE_PRECISION "Change field from double to float" OFF)
 if(SINGLE_PRECISION)

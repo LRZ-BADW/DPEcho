@@ -31,7 +31,7 @@ class Problem {
     bool dumpHalos;
     field *out[FLD_TOT]; // Just to print
 
-    Problem(mysycl::queue q, Grid *g, Domain *f, field_array &out);
+    Problem(mysycl::queue q, std::string &confFile, Grid *g, Domain *f, field_array &out);
     void InitRampWH (field *);
     void InitRampNH (field *);
     void InitConstWH(field *, field );

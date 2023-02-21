@@ -1,3 +1,5 @@
+[![DPEcho license](https://img.shields.io/badge/License-Apache_2.0-green.svg)](https://github.com/LRZ-BADW/DPEcho/blob/main/LICENSE) [![DOI](https://zenodo.org/badge/554711124.svg)](https://zenodo.org/badge/latestdoi/554711124) [![Generic badge](https://img.shields.io/badge/Language-SYCL%202020-orange.svg)](https://shields.io/)
+
 # DPEcho: General Relativity in SYCL for the 2020s and beyond
 Numerical sciences are experiencing a renaissance thanks to the spread of heterogeneous computing, which opens to simulations a quantitatively and qualitatively larger class of problems, albeit at the cost of large code refactoring efforts.
 The SYCL open standard rewards such porting efforts with highly scalable results, widely portable as never before, and likely to stand the test of time.
@@ -13,14 +15,14 @@ As a result, on the core physics elements ported so far, the measured performanc
 
 ## Prerequisites
 
-It is possible to compile echo with SYCL2020-compatible compilers.
+It is possible to compile echo with SYCL 2020-compatible compilers.
 However, our main target so far was the **Intel oneAPI DPC++ Compiler**.
-Nevertheless, with minor tweaks to the the CMake file, it is possible to use other implementations that support SYCL20202.
+Nevertheless, with minor tweaks to the the CMake file, it is possible to use other implementations that support SYCL 2020.
 So far, we successfully used:
 
-* **[Intel oneAPI toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/overview.html)** (e.g. version 2022.2) targeting Intel CPUs and Intel GPUs.
-* **[Intel LLVM compiler](https://github.com/intel/llvm)** open Source project targeting Intel CPUs and NVIDIA GPUs.
-* **[hipSYCL](https://github.com/illuhad/hipSYCL)* - a SYCL implementation for CPUs and GPUs*
+* **[Intel oneAPI toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/overview.html)** (version >= 2023.0) targeting Intel CPUs and Intel GPUs. Using the **[Codeplay Plugins](https://codeplay.com/solutions/oneapi/)**, NVIDIA and AMD GPUs can also be targeted.
+* **[Intel LLVM compiler](https://github.com/intel/llvm)** open Source project targeting Intel CPUs and NVIDIA and AMD GPUs.
+* **[OpenSYCL](https://github.com/OpenSYCL/OpenSYCL)* - a SYCL implementation for CPUs and GPUs (functionality untested in DPEcho)*
 
 Depending on the chosen compiler, DPEcho is capable of running on a wide variety of CPUs and GPUs.
 It is possible to use compute devices only capable of working with single-precision floating point numbers, but for a sufficient accuracy with more complex scenarios, double precision support is likely necessary.
@@ -48,16 +50,23 @@ make
 Simulation parameters such as order of derivation, type of simulation (MHD or GR-MHD) or type of execution device may be edited in the CCMake command line UI.
 Other parameters may be set at runtime.
 An example parameter file is shown at [the example parameter file alfven.par](examples/alfven.par).
-Note that for the parameter file to be correctly detected, it needs to be in the working directory, and named **echo.par**.
+As a default behavior, DPEcho expects a parameter file called **echo.par** in its working directory.
+The path to an alternative file may also be passed as a commandline argument.
 
+## Known Issues
 
-## References & Authors
-See `Cite this repository` panel.
+* NVIDIA GPUs report out of resources with automatic kernel invocations. Defaulting to manual workgroup size specification.
+* AMD GPUs and MPI are currently untested.
 
-[![DOI](https://zenodo.org/badge/554711124.svg)](https://zenodo.org/badge/latestdoi/554711124)
+## References
 
-## License
+* [Intel Parallel Universe Magazine](https://www.intel.com/content/www/us/en/developer/articles/technical/dpecho-general-relativity-sycl-for-2020-beyond.html#gs.pqrf25), Salvatore Cielo, Alexander Pöppl, Luca Del Zanna, Matteo Bugli - *DPEcho: General Relativity with SYCL for the 2020s and beyond*
 
-This project is licensed under Apache License version 2.0 - see the [LICENSE.md](LICENSE.md) file for details
-
-
+## Authors
+(in alphabetical order)
+* Fabio Baruffa (former)
+* Matteo Bugli
+* **Salvatore Cielo**
+* Luca Del Zanna
+* Luigi Iapichino (former)
+* **Alexander Pöppl**

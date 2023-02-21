@@ -28,23 +28,16 @@ int main(int argc, char** argv ) {
   Logger *Log = Logger::getInstance( &argc, &argv );
   Log->togglePcontrol(0);
   Log->setInfoVerbosity(10); Log->setPar(false);
-  DeviceConfig dc; dc.listDevices();
-
-#ifdef GPU
-  mysycl::gpu_selector  sDev;
-#elif defined(NDEBUG)
-  mysycl::cpu_selector  sDev;
-#else
-  mysycl::host_selector sDev;
-#endif
-  mysycl::queue qDev(sDev); dc.printTargetInfo(qDev);
 
   //-- Parameters
-  unsigned Mx = 24, My = 24,  Mz = 24, Hx = 4, Hy = 4, Hz = 4;
-  int    logVerb = 4;  unsigned long locSize = 8;
-  bool dumpHalos = false;
+  unsigned Mx = 24, My = 24,  Mz = 24, Hx = 4, Hy = 4, Hz = 4, nD = -1;
+  int    logVerb = 4; bool dumpHalos = false;
+#if SYCL!=oneAPI
+  unsigned long locSize = 8;
+#endif
   Log->setPar(false);   *Log+0<<TAG<<" Reading input: ";
-  string key, val;  ifstream inFile("echo.par");
+  string confFile = (argc > 1) ? argv[1] : "echo.par";
+  string key, val;  ifstream inFile(confFile);
   field bha = 0.0, bhm = 0.0, bhc = 0.0;
   while (getline(inFile, key, ' ') && getline(inFile, val)){
     if(!key.compare("Mx"       )){ Mx = stoi(val); *Log<<"\n\tMx "<< Mx ; continue;}
@@ -53,12 +46,15 @@ int main(int argc, char** argv ) {
     if(!key.compare("Hx"       )){ Hx = stoi(val); *Log<<"\n\tHx "<< Hx ; continue;}
     if(!key.compare("Hy"       )){ Hy = stoi(val); *Log<<"\n\tHy "<< Hy ; continue;}
     if(!key.compare("Hz"       )){ Hz = stoi(val); *Log<<"\n\tHz "<< Hz ; continue;}
+#if SYCL!=oneAPI
     if(!key.compare("locSize"  )){ locSize  = (size_t)stoi(val); *Log<<"\n\tlocSize   " << locSize   ; continue;}
+#endif
     if(!key.compare("logVerb"  )){ logVerb  =         stoi(val); *Log<<"\n\tlogVerb   " << logVerb   ; continue;}
     if(!key.compare("dumpHalos")){ dumpHalos= (bool)  stoi(val); *Log<<"\n\tdumpHalos " << dumpHalos ; continue;}
-    if(!key.compare("bha"      )){ bha =  static_cast<field>(stod(val)); *Log<<"\n\tbha " << bha ; continue;}
-    if(!key.compare("bhm"      )){ bhm =  static_cast<field>(stod(val)); *Log<<"\n\tbhm " << bhm ; continue;}
-    if(!key.compare("bhc"      )){ bhc =  static_cast<field>(stod(val)); *Log<<"\n\tbhc " << bhc; continue;}
+    if(!key.compare("bha"      )){ bha = static_cast<field>(stod(val)); *Log<<"\n\tbha " << bha ; continue;}
+    if(!key.compare("bhm"      )){ bhm = static_cast<field>(stod(val)); *Log<<"\n\tbhm " << bhm ; continue;}
+    if(!key.compare("bhc"      )){ bhc = static_cast<field>(stod(val)); *Log<<"\n\tbhc " << bhc ; continue;}
+    if(!key.compare("forceDevice")){ nD = stoi(val); *Log<<"\n\tnD "<< nD ; continue;}
   }
   //-- Further parameter processing
   Log->fl();  Log->setInfoVerbosity(logVerb);  Log->setPar(false);
@@ -66,6 +62,10 @@ int main(int argc, char** argv ) {
   if(Hy<NGC){ Hy=NGC; Log->Info(4, "Raising Hy to allowed min %d\n", NGC ); }
   if(Hz<NGC){ Hz=NGC; Log->Info(4, "Raising Hz to allowed min %d\n", NGC ); }
   Metric::setParameters(bha, bhm, bhc);   // Only relevant for non-Cartesian metrics, otherwise, no-op.
+
+  //-- SYCL device selection
+  DeviceConfig dc; // automation inside DeviceConfig
+  mysycl::queue qDev(dc.deviceWith(nD));
 
   // -- Domain & Grid
   Log->setPar(true);
@@ -77,34 +77,32 @@ int main(int argc, char** argv ) {
 
   // -- Allocations
   int ok = 1;
-  field *out[FLD_TOT]; for (int i=0; i < FLD_TOT; ++i){ out[i] = malloc_shared<field>(Nout, qDev); ok *= (NULL!=out[i]); } // For ease of custom output
-  field *v[FLD_TOT];   for (int i=0; i < FLD_TOT; ++i){ v[i]   = malloc_device<field>(Ncell, qDev);  ok *= (NULL!=v[i]); } // Primitives
-  field *u[FLD_TOT];   for (int i=0; i < FLD_TOT; ++i){ u[i]   = malloc_device<field>(Ncell, qDev);  ok *= (NULL!=u[i]); } // Conserved
-  field *f[FLD_TOT];   for (int i=0; i < FLD_TOT; ++i){ f[i]   = malloc_device<field>(Ncell, qDev);  ok *= (NULL!=f[i]); } // Fluxes
-  field *du[FLD_TOT];  for (int i=0; i < FLD_TOT; ++i){ du[i]  = malloc_device<field>(Ncell, qDev); ok *= (NULL!=du[i]); } // Time Evolution
-  field *u0[FLD_TOT];  for (int i=0; i < FLD_TOT; ++i){ u0[i]  = malloc_device<field>(Ncell, qDev); ok *= (NULL!=u0[i]); } // RK basis
-#ifdef UCT
-  field *apG[3];  for (int i=0; i < 3; ++i){ apG[i]  = malloc_device<field>(Ncell, qDev); ok *= (NULL!=apG[i]); } // FWD characteristics (best with CT)
-  field *amG[3];  for (int i=0; i < 3; ++i){ amG[i]  = malloc_device<field>(Ncell, qDev); ok *= (NULL!=amG[i]); } // BWD characteristics (best with CT)
-  field *vt0[3];  for (int i=0; i < 3; ++i){ vt0[i]  = malloc_device<field>(Ncell, qDev); ok *= (NULL!=vt0[i]); } // Transverse vel. 1
-  field *vt1[3];  for (int i=0; i < 3; ++i){ vt1[i]  = malloc_device<field>(Ncell, qDev); ok *= (NULL!=vt1[i]); } // Transverse vel. 1
+  field *out[FLD_TOT];  for (int i=0; i < FLD_TOT; ++i){out[i] = malloc_shared<field>(Nout , qDev); ok *= (NULL!=out[i]); } // For ease of custom output
+  field   *v[FLD_TOT];  for (int i=0; i < FLD_TOT; ++i){  v[i] = malloc_device<field>(Ncell, qDev); ok *= (NULL!=v[i]); } // Primitives
+  field   *u[FLD_TOT];  for (int i=0; i < FLD_TOT; ++i){  u[i] = malloc_device<field>(Ncell, qDev); ok *= (NULL!=u[i]); } // Conserved
+  field   *f[FLD_TOT];  for (int i=0; i < FLD_TOT; ++i){  f[i] = malloc_device<field>(Ncell, qDev); ok *= (NULL!=f[i]); } // Fluxes
+  field  *du[FLD_TOT];  for (int i=0; i < FLD_TOT; ++i){ du[i] = malloc_device<field>(Ncell, qDev); ok *= (NULL!=du[i]); } // Time Evolution
+  field  *u0[FLD_TOT];  for (int i=0; i < FLD_TOT; ++i){ u0[i] = malloc_device<field>(Ncell, qDev); ok *= (NULL!=u0[i]); } // RK basis
+#ifndef NDEBUG    // For printing arbitrary intermediate values
+  field *debug[FLD_TOT];for (int i=0; i < FLD_TOT; ++i){debug[i] = malloc_shared<field>(Ncell, qDev); ok *= (NULL!=debug[i]); }
 #endif
-#ifndef NDEBUG  // Be ready to plot fluxes and debug arrays
-  field *debug[FLD_TOT];  for (int i=0; i < FLD_TOT; ++i){ debug[i]  = malloc_shared<field>(Ncell, qDev); ok *= (NULL!=debug[i]); } // For printing arbitrary intermediate values
-
+#ifdef UCT
+  field *apG[3];  for (int i=0; i < 3; ++i){ apG[i] = malloc_device<field>(Ncell, qDev); ok *= (NULL!=apG[i]); } // FWD characteristics (best with CT)
+  field *amG[3];  for (int i=0; i < 3; ++i){ amG[i] = malloc_device<field>(Ncell, qDev); ok *= (NULL!=amG[i]); } // BWD characteristics (best with CT)
+  field *vt0[3];  for (int i=0; i < 3; ++i){ vt0[i] = malloc_device<field>(Ncell, qDev); ok *= (NULL!=vt0[i]); } // Transverse vel. 1
+  field *vt1[3];  for (int i=0; i < 3; ++i){ vt1[i] = malloc_device<field>(Ncell, qDev); ok *= (NULL!=vt1[i]); } // Transverse vel. 1
 #endif
   if(!ok){Log->Error("%s Cannot allocate data. Exiting.", TAG );}
 
   // -- Initialization
   Log->setPar(true);
   field dtLoc; // local copy of time, for ease of capture
-  Problem *Alf = new Problem(qDev, &grid, DD, out);
+  Problem *Alf = new Problem(qDev, confFile, &grid, DD, out);
   Alf->Alfven(v, u);  // Inits v and u in DEVICE, calls BCex, prints ICs.
 
   //-- SYCL ranges and related accessories
   int      gOff[]=      {grid.h[0], grid.h[1], grid.h[2]};
   range<3> rStd  = range(grid.n[0], grid.n[1], grid.n[2]);
-  range<3> rLoc  = range(  locSize,   locSize,   locSize);
   field   *aMax  = malloc_shared<field>(3, qDev), vChar; // For reduction, and CFL in timestepping
 
   //-- Main Evolution loop
@@ -114,24 +112,28 @@ int main(int argc, char** argv ) {
     for (int irk = 0; irk < NRK; irk++){  //-- RK loop
       if (!irk){ aMax[0]=0.0; aMax[1]=0.0; aMax[2]=0.0; }
 
+#if SYCL==oneAPI
       for(unsigned myDir=0; myDir<3; myDir++){ //-- Direction loop
-        auto maxReduction = my1api::reduction(aMax + myDir, my1api::maximum<field>());
-        qDev.submit([&](auto &h) {
-          h.parallel_for(nd_range<3> (rStd, rLoc), maxReduction, [=](nd_item<3> it, auto &max) {
+        qDev.parallel_for<class parForFluxes>(rStd,
+             mysycl::reduction(aMax+myDir, my1api::maximum<field>()), // mysycl::property::reduction::initialize_to_identity()),
+             [=](id<3> id, auto &max){
+#else // OpenSYCL, LLVM and oneAPIold cases
+      range<3> rLoc  = range(  locSize,   locSize,   locSize);
+      for(unsigned myDir=0; myDir<3; myDir++){ //-- Direction loop
+        auto maxReduction = mysycl::reduction(aMax + myDir, mysycl::maximum<field>());
+        qDev.parallel_for(nd_range<3> (rStd, rLoc), maxReduction, [=](nd_item<3> it, auto &max) {
+             id<3> id = it.get_global_id();           // All needed global indexes
+#endif
+            int myId = globLinId(id, grid.nh, gOff); // Accessing v, u and the like
             // What you declare here resides in GPU core-memory >~ 32 kB
             // BUT few registers, so declare things as you need them. - SC
-            id<3> id = it.get_global_id();           // All needed global indexes
-            int myId = globLinId(id, grid.nh, gOff); // Accessing v, u and the like
-
             int dStride= stride(id, myDir, grid.nh); // Stride from the above indexes
             field vR[FLD_TOT], vL[FLD_TOT];
             for (int i=0; i < FLD_TOT; ++i){ holibRec(myId, v[i], dStride, vL+i,  vR+i); }
 
             Metric g(grid.xC(id, 0), grid.xC(id, 1), grid.xC(id, 2));
-            // TODO: include evolve_sources to incorporate source terms here.
             field uR[FLD_TOT], fR[FLD_TOT], vfR[2], vtR[2];  physicalFlux(myDir, g, vR, uR, fR, vfR, vtR);
             field uL[FLD_TOT], fL[FLD_TOT], vfL[2], vtL[2];  physicalFlux(myDir, g, vL, uL, fL, vfL, vtL);
-            // TODO: include evolve_sources to incorporate source terms here as well (before and after fluxes).
 
             field ap = mysycl::max((field)0., mysycl::max( vfL[0], vfR[0]));
             field am = mysycl::max((field)0., mysycl::max(-vfL[1],-vfR[1]));
@@ -151,18 +153,17 @@ int main(int argc, char** argv ) {
             debug[1][myId] = ap;    debug[2][myId] = am;    debug[3][myId] = ap+am;
             debug[4][myId] = uR[0]; debug[5][myId] =-uL[0]; debug[6][myId] = uR[0]-uL[0];
 #endif
-          }); // end parallel_for
-        }); // end queue submission
+        }); // end parallel_for
         qDev.wait_and_throw(); // Now the flux is available everywhere
 
         //-- Flux reconstr & Derivatives. Trying to provide more halos to skip this was not beneficial!
         DD->BCex(myDir, grid, f); // call BCEX on fluxes.
 
 #ifndef NDEBUG
+        // Warning: Uncommenting this results in three full dumps per timestep (one per spatial direction)
 	// Alf->dump(f); Alf->dump(debug);
 #endif
-
-        qDev.parallel_for(rStd, [=](item<3> it) { // Update du with current direction
+        qDev.parallel_for<class parForUpdateDu>(rStd, [=](item<3> it) { // Update du with current direction
           id<3> id = it.get_id();
           int myId   = globLinId(id, grid.nh, grid.h ); // Accessing v, u and the like
           int dStride= stride   (id,   myDir, grid.nh); // Byproduct of the above
@@ -181,7 +182,7 @@ int main(int argc, char** argv ) {
         qDev.wait_and_throw();
       }
 
-      qDev.parallel_for(rStd, [=](item<3> it) { // UPDATE RK
+      qDev.parallel_for<class parForRK>(rStd, [=](item<3> it) { // UPDATE RK
         id<3> id = it.get_id();
         int myId   = globLinId(it.get_id(), grid.nh, grid.h ); // Accessing v, u and the like
         for (int i=0; i<FLD_TOT; ++i)
@@ -202,7 +203,6 @@ int main(int argc, char** argv ) {
 #ifndef NDEBUG
     // Alf->dump(u);
 #endif
-
     if( Alf->t() / Alf->tMax() > Alf->iOut() * Alf->tOut() ){
       Log->togglePcontrol(0); // When profiling, exclude output
       Alf->dump(v);
@@ -212,20 +212,20 @@ int main(int argc, char** argv ) {
 
   Log->togglePcontrol(0);
 
-  for (int i=0; i < FLD_TOT; ++i){ free(out[i], qDev); }
-  for (int i=0; i < FLD_TOT; ++i){ free(v[i], qDev); }
-  for (int i=0; i < FLD_TOT; ++i){ free(u[i], qDev); }
-  for (int i=0; i < FLD_TOT; ++i){ free(u0[i], qDev); }
-  for (int i=0; i < FLD_TOT; ++i){ free(f[i], qDev); }
-  for (int i=0; i < FLD_TOT; ++i){ free(du[i], qDev); }
-#ifdef UCT
-  for (int i=0; i < 3; ++i){ free(apG[i], qDev); }
-  for (int i=0; i < 3; ++i){ free(amGdu[i], qDev); }
-  for (int i=0; i < 3; ++i){ free(vt1[i], qDev); }
-  for (int i=0; i < 3; ++i){ free(vt2[i], qDev); }
-#endif
+  for (int i=0; i < FLD_TOT; ++i){ free(  out[i], qDev); }
+  for (int i=0; i < FLD_TOT; ++i){ free(    v[i], qDev); }
+  for (int i=0; i < FLD_TOT; ++i){ free(    u[i], qDev); }
+  for (int i=0; i < FLD_TOT; ++i){ free(   u0[i], qDev); }
+  for (int i=0; i < FLD_TOT; ++i){ free(    f[i], qDev); }
+  for (int i=0; i < FLD_TOT; ++i){ free(   du[i], qDev); }
 #ifndef NDEBUG
   for (int i=0; i < FLD_TOT; ++i){ free(debug[i], qDev); }
+#endif
+#ifdef UCT
+  for (int i=0; i < 3; ++i){ free(  apG[i], qDev); }
+  for (int i=0; i < 3; ++i){ free(amGdu[i], qDev); }
+  for (int i=0; i < 3; ++i){ free(  vt1[i], qDev); }
+  for (int i=0; i < 3; ++i){ free(  vt2[i], qDev); }
 #endif
 
   Log->setPar(false);
