@@ -74,6 +74,11 @@ int main(int argc, char** argv ) {
   Grid grid = Grid(Mx,My,Mz, Hx,Hy,Hz, DD->locMin(0),DD->locMax(0), DD->locMin(1),DD->locMax(1), DD->locMin(2),DD->locMax(2));
   grid.print();
   unsigned Ncell = grid.nht, Nout = dumpHalos ? Ncell : grid.nt; // For comfort
+  const int strides[3] = {stride(0,grid.nh),stride(1,grid.nh),stride(2,grid.nh)};
+  
+  // Used for mapping 3D grid to 1D grid
+  const int start_idx = grid.h[0]*strides[0] + grid.h[1]*strides[1] + grid.h[2]*strides[2];
+  const int stop_idx = (grid.n[0]+grid.h[0])*strides[0]+(grid.n[1]+grid.h[1])*strides[1]+(grid.n[2]+grid.h[2])*strides[2];
 
   // -- Allocations
   int ok = 1;
@@ -103,6 +108,7 @@ int main(int argc, char** argv ) {
   //-- SYCL ranges and related accessories
   int      gOff[]=      {grid.h[0], grid.h[1], grid.h[2]};
   range<3> rStd  = range(grid.n[0], grid.n[1], grid.n[2]);
+  range<1> linear_range  = range(stop_idx - start_idx);
   field   *aMax  = malloc_shared<field>(3, qDev), vChar; // For reduction, and CFL in timestepping
 
   //-- Main Evolution loop
@@ -163,13 +169,19 @@ int main(int argc, char** argv ) {
         // Warning: Uncommenting this results in three full dumps per timestep (one per spatial direction)
 	// Alf->dump(f); Alf->dump(debug);
 #endif
-        qDev.parallel_for<class parForUpdateDu>(rStd, [=](item<3> it) { // Update du with current direction
-          id<3> id = it.get_id();
-          int myId   = globLinId(id, grid.nh, grid.h ); // Accessing v, u and the like
-          int dStride= stride   (id,   myDir, grid.nh); // Byproduct of the above
-          for (int i=0; i<FLD_TOT; ++i)
-            du[i][myId] = (myDir?du[i][myId]:0) + holibDer(myId, f[i], dStride) / grid.dx[myDir];
-        }).wait_and_throw(); // Now we have the du up to the current direction
+
+        const field multiplier = field(1) / grid.dx[myDir];
+        const int dStride = strides[myDir];
+        for (int iVar=0; iVar<FLD_TOT; ++iVar){
+          field *fi = f[iVar], *dui = du[iVar];
+          qDev.parallel_for<class parForUpdateDu>(linear_range, [=](item<1> it) { // Update du with current direction
+            int myId = start_idx+it[0];
+            field d = (myDir ? dui[myId] : 0);
+            d += multiplier * holibDer(myId, fi, dStride);
+            dui[myId] = d;
+          }).wait_and_throw();
+        }
+
       } // - End loop on directions
 
       if (0 == irk){ // - Only at the end of 1st RK step compute the timestep (less MPI barriers)
@@ -182,14 +194,20 @@ int main(int argc, char** argv ) {
         qDev.wait_and_throw();
       }
 
-      qDev.parallel_for<class parForRK>(rStd, [=](item<3> it) { // UPDATE RK
-        id<3> id = it.get_id();
-        int myId   = globLinId(it.get_id(), grid.nh, grid.h ); // Accessing v, u and the like
-        for (int i=0; i<FLD_TOT; ++i)
-          u[i][myId] = crk1[irk] * u0[i][myId] + crk2[irk]*( u[i][myId] - dtLoc*du[i][myId] );
+      for (int iVar=0; iVar<FLD_TOT; ++iVar){
+        field *dui = du[iVar], *u0i = u0[iVar], *ui = u[iVar];
+        qDev.parallel_for<class parForRK>(linear_range, [=](item<1> it) { // Update u with du
+          int myId = start_idx+it[0];
+          ui[myId] = crk1[irk] * u0i[myId] + crk2[irk]*( ui[myId] - dtLoc*dui[myId] );
+        });
+      }
+      qDev.parallel_for<class parForCons2Prim>(rStd, [=](item<3> it) { // Convert conserved variables to primitive variables
+        auto id = it.get_id();
+        int myId   = globLinId(id, grid.nh, grid.h ); // Accessing v, u and the like
         Metric g(grid.xC(id, 0), grid.xC(id, 1), grid.xC(id, 2));
         cons2prim(myId, Ncell, u, v, g);
-      }).wait_and_throw();
+      });
+      qDev.wait_and_throw();
 
       for(unsigned myDir=0; myDir<3; myDir++) { DD->BCex(myDir, grid, v); }
 

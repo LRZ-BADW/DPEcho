@@ -81,4 +81,9 @@ inline int stride(id<3> id, int myDir, const int arrRange[3]){
   return id1 - id0; // Wasteful but SAFE(r)
 }
 
+inline int stride(int myDir, const int arrRange[3]){
+  id<3> id(0,0,0);
+  return stride(id,myDir,arrRange); // Wasteful but SAFE(r)
+}
+
 #endif
