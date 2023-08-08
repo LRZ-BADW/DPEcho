@@ -27,7 +27,7 @@ device DeviceConfig::deviceWith(int id){
   }else{
     ((*log)+2)<<TAG <<"Looking at DPEcho default device."; log->fl();
     listDevices();
-#if   SYCL==oneAPI || SYCL==LLVM
+#if   SYCL==oneAPI || SYCL==LLVM || SYCL==OpenSYCL
 #if   DEVICE==DEV_CPU
     temp = mysycl::device(mysycl::cpu_selector_v); // mysycl::cpu_selector_v         fallBackSel;
 #elif DEVICE==DEV_GPU

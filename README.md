@@ -56,7 +56,10 @@ The path to an alternative file may also be passed as a commandline argument.
 ## Known Issues
 
 * NVIDIA GPUs report out of resources with automatic kernel invocations. Defaulting to manual workgroup size specification.
-* AMD GPUs and MPI are currently untested.
+* AMD GPU support through OpenSYCL requires GPU-aware-MPI and must be configured for a specific architecture. E.g.:
+```bash
+CXX=$ROCM_PATH/llvm/bin/clang cmake -DSYCL=OpenSYCL -DSYCL_DEVICE=GPU -DSYCL_ARCH=AMD -DCMAKE_CXX_FLAGS="--offload-arch=gfx90a" ..
+```
 
 ## References
 

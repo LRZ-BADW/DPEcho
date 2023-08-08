@@ -10,7 +10,18 @@
 
 #include "Domain.hpp"
 
-Domain::~Domain( ){  free(bufL, qq); free(bufR, qq);
+
+#if SYCL == OpenSYCL && SYCL_ARCH == AMD
+// TODO: This should also trigger on if GPU aware MPI is enabled
+// For MPI enabled and disabled, performance is enhanced if the buffer is located on device
+#define USE_DEVICE_BUFFER 1
+#ifdef MPICODE
+#define USE_ISENDRECV 1
+#endif
+#endif
+
+
+Domain::~Domain( ){  free(bufL, qq); free(bufR, qq); free(rbufR, qq); free(rbufR, qq);
   Log->setPar(false); *Log+4<<TAG<<"Domain removed and BCex buffers deallocated."; Log->fl();
 }
 
@@ -19,8 +30,20 @@ Domain::Domain(mysycl::queue q, size_t bufMax) {
   int nprocs  = Log->getNumProcs(), myrank = Log->getMyRank(),  reorder = 0;
 
   qq = q; // Use the queue to allocate the buffers
+#ifdef USE_DEVICE_BUFFER
+  bufL= malloc_device<field>(FLD_TOT*bufMax, qq); if(!bufL){Log->Error("%s Cannot allocate bufL.", TAG );}
+  bufR= malloc_device<field>(FLD_TOT*bufMax, qq); if(!bufR){Log->Error("%s Cannot allocate bufR.", TAG );}
+#else
   bufL= malloc_shared<field>(FLD_TOT*bufMax, qq); if(!bufL){Log->Error("%s Cannot allocate bufL.", TAG );}
   bufR= malloc_shared<field>(FLD_TOT*bufMax, qq); if(!bufR){Log->Error("%s Cannot allocate bufR.", TAG );}
+#endif
+
+#ifdef USE_ISENDRECV
+  rbufL= malloc_device<field>(FLD_TOT*bufMax, qq); if(!rbufL){Log->Error("%s Cannot allocate rbufL.", TAG );}
+  rbufR= malloc_device<field>(FLD_TOT*bufMax, qq); if(!rbufR){Log->Error("%s Cannot allocate rbufR.", TAG );}
+#else
+  rbufL = rbufR = nullptr;
+#endif
 
   // Assign default values before reading parameters
   boxMin_[0] = boxMin_[1] = boxMin_[2] =-0.5;
@@ -136,6 +159,9 @@ void Domain::BCex(int myDir, Grid gr, field_array &v){ // gr is the usual local 
 #ifdef MPICODE
   int myRank; MPI_Comm_rank(cartComm_, &myRank);
   MPI_Status status;
+  
+#define CHECK_MPI(status) \
+  {int mympistatus = status; if(mympistatus != MPI_SUCCESS) {std::cerr << "*** ERROR *** " << __FILE__ << ":"<<__LINE__<<"\n\n" << #status << "\n\nReturned status: " << mympistatus << "\n"; MPI_Abort(MPI_COMM_WORLD,EXIT_FAILURE);}}
 #endif
 
   // Each direction may have a different buffer size. We may also store them, whatever.
@@ -144,33 +170,79 @@ void Domain::BCex(int myDir, Grid gr, field_array &v){ // gr is the usual local 
   range rBuf  = range( nBuf[0],  nBuf[1],  nBuf[2]); auto   sBuf = rBuf.size();
 
   Log->setPar(true); *Log+8<<TAG<<" Filling buffers ..."; Log->fl();
+  
+#ifdef MPICODE // In serial, it's wasteful to allocate the buffers. As if someone cared about serial cases. -SC
+#ifdef USE_ISENDRECV
+  // (Aug2023) MPI appears to require a full queue sync - otherwise we see memory corruption issues
+  qq.wait();
+
+  *Log+8<<TAG<<"L+R MPI_Irecv ... "; Log->fl();
+  auto lower_recv_request = MPI_Request();
+  CHECK_MPI(MPI_Irecv(this->rbufL,FLD_TOT*sBuf,MPI_FIELD,neighRankPrev_[myDir],0,cartComm_,&lower_recv_request));
+  auto upper_recv_request = MPI_Request();
+  CHECK_MPI(MPI_Irecv(this->rbufR,FLD_TOT*sBuf,MPI_FIELD,neighRankNext_[myDir],0,cartComm_,&upper_recv_request));
+#endif
+#endif
+
   // On the parallel_for: capture the buffers separately.
   // Also: cumbersome to calculate rLoc (quite small anyway); with item<3> runtime decides.
-  qq.parallel_for( rBuf, [=, bufL=this->bufL, bufR=this->bufR ](item<3> it){
+  qq.parallel_for<class parForPack>( rBuf, [=, send_bufL=this->bufL, send_bufR=this->bufR ](item<3> it){
     int iBufL = it.get_linear_id()        , iBufR = sBuf   -1 -iBufL; // The same, if we start from the end
     int iVL   = globLinId(it, gr.nh, nOff), iVR   = gr.nht -1 -iVL  ;
     for(int iVar=0; iVar<FLD_TOT; ++iVar){
-      bufL[iVar*sBuf+iBufL] = v[iVar][iVL];
-      bufR[iVar*sBuf+iBufR] = v[iVar][iVR];
+      send_bufL[iVar*sBuf+iBufL] = v[iVar][iVL];
+      send_bufR[iVar*sBuf+iBufR] = v[iVar][iVR];
     }
   }).wait_and_throw();
 
-#ifdef MPICODE // In serial, it's wasteful to allocate the buffers. As if someone cared about serial cases. -SC
+  // Reverse the buffers for the unpacking phase
+  field * recvBufL = this->bufR;
+  field * recvBufR = this->bufL;
+
+#ifdef MPICODE
+#ifdef USE_ISENDRECV
+  // (Aug2023) MPI appears to require a full queue sync - otherwise we see memory corruption issues
+  qq.wait();
+
+  *Log+8<<TAG<<"L+R MPI_Isend ... "; Log->fl();
+  auto lower_send_request = MPI_Request();
+  CHECK_MPI(MPI_Isend(this->bufL,FLD_TOT*sBuf,MPI_FIELD,neighRankPrev_[myDir],0,cartComm_,&lower_send_request));
+  auto upper_send_request = MPI_Request();
+  CHECK_MPI(MPI_Isend(this->bufR,FLD_TOT*sBuf,MPI_FIELD,neighRankNext_[myDir],0,cartComm_,&upper_send_request));
+
+  CHECK_MPI(MPI_Wait(&lower_recv_request,&status));
+  CHECK_MPI(MPI_Wait(&upper_recv_request,&status));
+ 
+  recvBufL = this->rbufR;
+  recvBufR = this->rbufL;
+#else
+
   *Log+8<<TAG<<"L+R MPI_Sendrrecv_replace ... "; Log->fl();
-  MPI_Sendrecv_replace(bufL,sBuf*FLD_TOT,MPI_FIELD,neighRankPrev_[myDir],myRank,neighRankNext_[myDir],MPI_ANY_TAG,cartComm_,&status);
-  MPI_Sendrecv_replace(bufR,sBuf*FLD_TOT,MPI_FIELD,neighRankNext_[myDir],myRank,neighRankPrev_[myDir],MPI_ANY_TAG,cartComm_,&status);
+  CHECK_MPI(MPI_Sendrecv_replace(bufL,sBuf*FLD_TOT,MPI_FIELD,neighRankPrev_[myDir],myRank,neighRankNext_[myDir],MPI_ANY_TAG,cartComm_,&status));
+  CHECK_MPI(MPI_Sendrecv_replace(bufR,sBuf*FLD_TOT,MPI_FIELD,neighRankNext_[myDir],myRank,neighRankPrev_[myDir],MPI_ANY_TAG,cartComm_,&status));
+
+#endif
+
 #endif
 
   nOff[myDir] = 0; // To write, we start from 0
   Log->setPar(true); *Log+8<<TAG<<" Recopying from buffers..."; Log->fl();
-  qq.parallel_for( rBuf, [=, bufL=this->bufL, bufR=this->bufR](item<3> it){  // v -> WHindex
+  qq.parallel_for<class parForUnpack>( rBuf, [=](item<3> it){  // v -> WHindex
     int iBufL = it.get_linear_id(        ), iBufR = sBuf   -1 -iBufL;  // The same, if we start from the end
     int iVL   = globLinId(it, gr.nh, nOff), iVR   = gr.nht -1 -iVL  ;
     for(int iVar=0; iVar<FLD_TOT; ++iVar){
-      v[iVar][iVR] = bufL[iVar*sBuf+iBufR];  // ...besides the flipped assignments
-      v[iVar][iVL] = bufR[iVar*sBuf+iBufL];  // ACHTUNG: Must reverse both L<-->R and the indexes in them!
+      v[iVar][iVL] = recvBufL[iVar*sBuf+iBufL];
+      v[iVar][iVR] = recvBufR[iVar*sBuf+iBufR];
     }
   }).wait_and_throw();
 
-  return;
+#ifdef MPICODE
+#ifdef USE_ISENDRECV
+  // (Aug2023) MPI appears to require a full queue sync - otherwise we see memory corruption issues
+  qq.wait();
+  CHECK_MPI(MPI_Wait(&lower_send_request,&status));
+  CHECK_MPI(MPI_Wait(&upper_send_request,&status));
+#endif
+#endif
+
 }

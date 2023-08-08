@@ -20,7 +20,12 @@
 #if   SYCL == OpenSYCL
 namespace mysycl = hipsycl::sycl;
 namespace my1api = hipsycl::sycl;
+#if SYCL_ARCH == AMD
+// Used to support relocatable device code (RDC) with OpenSYCL
+#define SYCL_EXTERNAL __host__ __device__
+#else
 #define SYCL_EXTERNAL // Not needed but interfaces must be made uniform
+#endif
 #else
 namespace mysycl = cl::sycl;
 namespace my1api = cl::sycl::ext::oneapi;
