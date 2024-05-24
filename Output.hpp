@@ -12,6 +12,7 @@
 #define DEBUG_OUTPUT_HPP
 
 #include "utils/tb-types.hpp"
+#include "Grid.hpp"
 
 #include <iostream>
 #include <string>
@@ -21,7 +22,7 @@
 class Problem;
 
 namespace output {
-  void writeArray(std::string dir, std::string name, Problem &problem);
+  void writeArray(Problem &problem, Grid &gr, std::string dir="out", std::string name="task");
 }
 
 #endif

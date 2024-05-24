@@ -12,61 +12,61 @@
 #define _Problem_hpp_
 
 #include "echo.hpp"
-#include "Logger.hpp"
 #include "Domain.hpp"
 #include "Grid.hpp"
 #include "Output.hpp"
-#include "Physics.hpp"
+#include "Parameters.hpp"
 #include "utils/tb-types.hpp"
 #include "utils/tb-timer.hpp"
 
-#include "echoSycl.hpp"
-
 class Problem {
 
-  friend void output::writeArray(std::string, std::string, Problem &);
+  friend void output::writeArray(Problem &, Grid &, std::string, std::string);
 
   public:
     int locSize;
     bool dumpHalos;
     field *out[FLD_TOT]; // Just to print
 
-    Problem(mysycl::queue q, std::string &confFile, Grid *g, Domain *f, field_array &out);
+    Problem(sycl::queue q, Parameters &param, Grid *g, Domain *f, field_array &out);
     void InitRampWH (field *);
     void InitRampNH (field *);
     void InitConstWH(field *, field );
     void InitConstNH(field *, field );
-    inline field tMax (){return tMax_ ;}
-    inline field tOut (){return tOut_ ;}
-    inline field t    (){return t_    ;}
-    inline field dt   (){return dt_   ;}
-    inline field cfl  (){return cfl_  ;}
+    inline field tMax (){return  tMax_ ;}
+    inline field tOut (){return  tOut_ ;}
+    inline field t    (){return  t_    ;}
+    inline field dt   (){return  dt_   ;}
+    inline field cfl  (){return  cfl_  ;}
+    inline field lap  (bool keep=true){return  stepTime_.lap(keep);}
     inline unsigned long iOut   (){return iOut_   ;}
     inline unsigned long iStep  (){return iStep_  ;}
     inline unsigned long nStep  (){return nStep_  ;}
     inline unsigned long BOVRank(){return BOVRank_;}
     // Output
     void dtUpdate(field);
-    void dtPrint ();
-    void dump( field_array &fld );
-    field time(){field myTime = stepTime_.lap(); stepTime_.init(); return myTime;}
+    void dump( field_array &fld, Grid &gr, std::string dir="out", std::string name="task");
+    void dump( field_array &fld, std::string dir="out", std::string name="task"){ dump(fld,*(this->grid_),dir,name ); };
+    std::string getTimings() { return stepTime_.getTimings(); }
 
-    // Specific problems -- TODO: Make this configurable at runtime
-    void TestUniform(field_array&, field);
-    void TestUniform(field_array &v     ){ TestUniform(v, 1.0); };
-    void Alfven(field_array &v, field_array &u); // v and u
-    void BlastWave(field_array&);
+    // Generic problem initializer -- calls specific inits based on config
+    void init(field_array &v, field_array &u);
+
+    // Specific problems
+    void Uniform  (field_array &v, field_array &u);
+    void Alfven   (field_array &v, field_array &u);
+    void BlastWave(field_array &v, field_array &u);
 
   private:
-    mysycl::queue qq;
+    Parameters &config;
+    sycl::queue qq;
     TB::Timer stepTime_;
     field tMax_, t_, dt_, cfl_, tOut_;
     unsigned int N_, nxNH_, nyNH_, nzNH_;
-    unsigned long BOVRank_ ; // Necessary as BOV output assumes zyx output order
+    unsigned long BOVRank_; // Necessary as BOV output assumes zyx output order
     unsigned long iOut_, iStep_, nStep_;
     Grid   *grid_;
     Domain *D_;
-    Logger *Log;
 };
 
 #endif

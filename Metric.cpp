@@ -11,16 +11,69 @@
 #include "Physics.hpp"
 #include "echo.hpp"
 
-#if METRIC == CARTESIAN  // We will put #ifdef for the different metrics (ALL analytic here!)
-SYCL_EXTERNAL field Metric::alpha  (){ return 1.0; }
-SYCL_EXTERNAL field Metric::betai  (unsigned int i){ return 0;}  // Controvariant beta element of the metric
-SYCL_EXTERNAL field Metric::gCon   (unsigned int i, unsigned int j){ return (i==j) ? 1.0 : 0.0; }
-SYCL_EXTERNAL field Metric::gCov   (unsigned int i, unsigned int j){ return (i==j) ? 1.0 : 0.0; }
+#if   METRIC == CARTESIAN  // We will put #ifdef for the different metrics (ALL analytic here!)
 SYCL_EXTERNAL field Metric::gDet   (){ return 1.0; }
-SYCL_EXTERNAL field Metric::dgAlpha(field i) {  return 0.0; } // Derivatives
-SYCL_EXTERNAL field Metric::dgBeta (field i, field j) {  return 0.0; }
-SYCL_EXTERNAL field Metric::dgCov  (field i, field j, field k) { return 0.0; }
-#endif // METRIC == CARTESIAN
+SYCL_EXTERNAL field Metric::gDet1  (){ return 1.0; }
+SYCL_EXTERNAL field Metric::alpha  (){ return 1.0; }
+SYCL_EXTERNAL field Metric::betai  (unsigned short i){ return 0;}  // Controvariant beta element of the metric
+SYCL_EXTERNAL field Metric::gCon   (unsigned short i, unsigned short j){ return (i==j) ? 1.0 : 0.0; }
+SYCL_EXTERNAL field Metric::gCov   (unsigned short i, unsigned short j){ return (i==j) ? 1.0 : 0.0; }
+SYCL_EXTERNAL field Metric::dgAlpha(unsigned short i) {  return 0.0; } // Derivatives
+SYCL_EXTERNAL field Metric::dgBeta (unsigned short i, unsigned short j) {  return 0.0; }
+SYCL_EXTERNAL field Metric::dgCov  (unsigned short i, unsigned short j, unsigned short k) { return 0.0; }
+#elif METRIC == KERR_SCHILD
+// WARNING: Mostly untested!
+SYCL_EXTERNAL field Metric::gDet   (){ return sycl::sqrt(rho2*det*sint2); }
+SYCL_EXTERNAL field Metric::gDet1  (){ return (sint<=1.e-6) ? 0.0 : sycl::rsqrt(rho2*det*sint2) ; }
+SYCL_EXTERNAL field Metric::alpha  (){ return sycl::rsqrt(1.+zz); }
+SYCL_EXTERNAL field Metric::betai  (unsigned short i){ return (0==i) ? (zz/(1.+zz)) : 0.0; }
+SYCL_EXTERNAL field Metric::gCon   (unsigned short i, unsigned short j){
+  switch(i*10+j){
+    case  0: return 1.0 + zz;
+    case 11: return rho2;
+    case 22: return (sigma/rho2)*sint2;
+    case  2: case 20: return -a*(1.+zz)*sint2;
+    default: return 0.0;
+  }
+}
+SYCL_EXTERNAL field Metric::gCov   (unsigned short i, unsigned short j){
+  switch(i*10+j){
+    case  0: return (sigma/rho2)/det;
+    case 11: return    1.0/rho2;
+    case 22: return (sint<=1.e-6) ? 0.0 : (1.0+zz)/(det*sint2);
+    case  2: case 20: return a*(1.0+zz)/det;
+    default: return 0.0;
+  }
+}
+// Derivatives
+SYCL_EXTERNAL field Metric::dgAlpha(unsigned short i) {
+  switch(i){
+    case  0: return  alpha()*.5*zz/(1.0+zz)*dxlogzz;
+    case  1: return -alpha()*.5*zz/(1.0+zz)*dylogzz;
+    default: return  0.0;
+  }
+}
+SYCL_EXTERNAL field Metric::dgBeta (unsigned short i, unsigned short j) {
+  switch(i*10+j){
+    case  0: return  zz/(1+zz)/(1.+zz)*dxlogzz;
+    case  1: return  zz/(1+zz)/(1.+zz)*dylogzz;
+    default: return  0.0;
+  }
+}
+SYCL_EXTERNAL field Metric::dgCov  (unsigned short i, unsigned short j, unsigned short k) {
+  switch(i*100+j*10+k){
+    case   0: return  zz*dxlogzz; //-- Along r
+    case 110: return  gCov(1,1)* dxlogrho2;
+    case 220: return  gCov(2,2)*(dxlogsigma-dxlogrho2);
+    case  20: case 200: return  gCov(0,2)*zz/(1+zz)*dxlogzz;
+    case   1: return zz*dylogzz;  //-- Along theta
+    case 111: return gCov(1,1) * dylogrho2;
+    case 221: return gCov(2,2) *(dylogsigma-dylogrho2+2*cost/sint);
+    case  21: case 201: return gCov(0,2)*(zz/(1.0+zz)*dylogzz+2*cost/sint);
+    default : return  0.0;        //-- Along phi and the others are all 0s
+  }
+}
+#endif // METRIC == TYPE
 
 // --- These functions are convenience functions, no modifications should be needed here.
 SYCL_EXTERNAL void   Metric::beta(field bet[3]){   bet[0] = betai(0); bet[1] = betai(1);  bet[2] = betai(2);}

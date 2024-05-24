@@ -13,33 +13,29 @@
 #include <cstddef>
 #include <cstddef>
 #include <unordered_map>
+#include <sys/stat.h>
 
+#include "Logger.hpp"
 #include "Output.hpp"
 #include "Problem.hpp"
 #include "utils/tb-types.hpp"
 
 using namespace std;
 
-#ifndef USE_FILE_SYSTEM_API_WORKAROUND
-#include <filesystem>
-#else
-#include <sys/stat.h>
 namespace std {
 namespace filesystem {
   void create_directory(std::string name) {
-    auto *log = Logger::getInstance();
+    using namespace std::string_literals;
     int res = mkdir(name.c_str(), 0755);
-    if (res != 0 && errno != EEXIST) {
-      log->Error("%s unable to create folder %s", TAG, name.c_str());
-    }
+    Log::Assert(res == 0 || errno == EEXIST, "unable to create folder "s + name);
   }
 }
 }
-#endif
 
 namespace output {
 
-  void writeArray(std::string dir, std::string name, Problem &problem) {
+  void writeArray(Problem &problem, Grid &gr, std::string dir, std::string name) {
+    using namespace std::string_literals;
     static std::unordered_map<std::string, int> numbers;
     int outNum_;
     if (numbers.find(dir + name) != numbers.end()) {
@@ -51,32 +47,28 @@ namespace output {
       filesystem::create_directory(dir);
     }
 
-    Logger *Log = Logger::getInstance();
-
-    if (problem.out[0] == nullptr) {
-      Log->Error("%s Array was not initialized.", TAG); return;
-    }
+    Log::Assert(problem.out[0] != nullptr, "Array was not initialized.");
 
     std::ostringstream datName, bovName;
     datName  << dir << "/" << std::setw(4)<<std::setfill('0') << outNum_;
     filesystem::create_directory(datName.str().c_str());
     bovName << datName.str() << ".bov";
     datName << "/" << name << "_" << std::setw(4)<<std::setfill('0')<< problem.BOVRank() << ".dat";
-    Log->setPar(true);
 
-    int Ncell[3], bricklets[3], Ntot=1;
+    int Ncell[3], Ntot=1;
     field brickSize  [3];
     field brickOrigin[3] = {problem.D_->boxMin (0), problem.D_->boxMin (1), problem.D_->boxMin (2)};
 
     for(int ii = 0; ii < 3; ++ii){
-      if( problem.dumpHalos ){ Ncell[ii] = problem.grid_->nh[ii]; }
-      else                   { Ncell[ii] = problem.grid_->n [ii]; }
+      if( problem.dumpHalos ){
+        Ncell[ii] = gr.nh[ii];
+        brickOrigin[ii]*=(1.0*gr.nh[ii])/gr.n[ii];
+      }
+      else                   { Ncell[ii] = gr.n [ii]; }
       Ntot*= Ncell[ii];
-      brickSize  [ii] = Ncell[ii] * problem.D_->cartDims(ii) * problem.grid_->dx[ii];
-      brickOrigin[ii]*= (problem.dumpHalos) * (1.0*problem.grid_->nh[ii])/problem.grid_->n[ii];
+      brickSize  [ii] = Ncell[ii] * problem.D_->cartDims(ii) * gr.dx[ii];
     }
 
-    Log->setPar(false);
     FILE *fp = fopen(datName.str().c_str(), "wb"); // For datafiles
     if(problem.out[0] != nullptr){
       for (int ii = 0; ii < Ntot; ++ii){
@@ -87,7 +79,7 @@ namespace output {
     }
     fclose(fp);
 
-    if( Log->master() ){ // For header file
+    if( Log::isMaster() ){ // For header file
       ofstream bov; bov.open(bovName.str(), ios_base::out);
       bov<<"TIME: "<< problem.t()<<"\n";
       bov<<"DATA_FILE: "<< std::setw(4)<<std::setfill('0') << outNum_ <<"/" << name << "_%04d.dat\n";
@@ -107,6 +99,7 @@ namespace output {
       bov<<"DATA_COMPONENTS: "<<FLD_TOT<<"\n"; // 1->scalar 2->complex 3->vector 4+->many scalars, *unnamed*
       bov<<std::flush; bov.close();
     }
-    Log->setPar(false);  *Log+0<<TAG<<"Dumped " << dir << " (" << name << ") output #"<< outNum_++; Log->fl();
+
+    Log::cout(0) << TAG << "Dumped " << dir << " (" << name << ") output #" << outNum_++ << Log::endl;
   }
 }

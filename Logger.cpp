@@ -1,177 +1,158 @@
-//   Copyright(C) 2020 Fabio Baruffa, Intel Corp.
-//   Copyright(C) 2021 Salvatore Cielo, LRZ
+//  Copyright(C) 2023 Alexander Pöppl, Intel Corp.
+//  Copyright(C) 2023 Salvatore Cielo, LRZ
 //
-//  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
-//  License. You may obtain a copy of the License at    http://www.apache.org/licenses/LICENSE-2.0
+//  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance
+//  with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an
-//  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific
-//  language governing permissions and limitations under the License.
+//  Unless required by applicable law or agreed to in writing, software distributed under the License is
+//  distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and limitations under the License.
 
 #include "Logger.hpp"
-#include "echo.hpp"
-#include <cstdarg>
-#include <cstdio>
+#include "Output.hpp"
 
-const string mytag(const string val){
+#ifdef MPICODE
+#include <mpi.h>
+#endif
+
+#ifdef VTUNE_API_AVAILABLE
+#include <ittnotify.h>
+#endif
+
+#include <string>
+#include <iostream>
+#include <fstream>
+#include <cstdlib>
+
+namespace std::filesystem {
+  void create_directory(std::string name);
+}
+
+std::ofstream Log::logFile;
+int Log::coutVerbosity;
+int Log::clogVerbosity;
+TB::Timer Log::runtimeTracker;
+EndMarker const Log::endl;
+FlushMarker const Log::flush;
+
+void Log::init(std::string logfileName, int coutVerb, int clogVerb) {
+  using namespace std::string_literals;
+  int rank = 0;
+#ifdef MPICODE
+  MPI_Init(nullptr, nullptr);
+  rank = mpiRank();
+
+  if (!rank) {
+    std::filesystem::create_directory(logfileName);
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
+#else
+  std::filesystem::create_directory(logfileName);
+#endif
+  std::string rankStr = std::to_string(rank); rankStr.insert(0, 8-rankStr.length(), '0');
+  logfileName = logfileName + "/"s + rankStr;
+  logFile = std::ofstream(logfileName);
+  coutVerbosity = coutVerb;
+  clogVerbosity = clogVerb;
+  Log::Assert(logFile.good(), "Log file "s + logfileName + " failed to open."s);
+  logo();
+  runtimeTracker.init();
+}
+
+void Log::finalize() {
+  Log::cout() << TAG << "Total runtime [s]: "<< runtimeTracker.lap() << Log::endl;
+#ifdef MPICODE
+  MPI_Finalize();
+#endif
+}
+
+
+LogStream<decltype(std::cout)> const Log::cout(int verbosity) { return LogStream(!isMaster() || (verbosity > coutVerbosity), std::cout); }
+
+LogStream<decltype(std::cerr)> const Log::cerr(int verbosity) { return LogStream(!isMaster() || (verbosity > coutVerbosity), std::cerr); }
+
+LogStream<std::ofstream>       const Log::clog(int verbosity) {
+  if (!logFile.good()) {
+    throw std::logic_error("Must initialize log file before logging starts.");
+  }
+  return LogStream(verbosity > clogVerbosity, logFile);
+}
+
+void Log::Assert(bool condition, std::string message) {
+  if (!condition) {
+    Log::cerr(0) << TAG << message << Log::endl;
+#ifdef MPICODE
+    MPI_Abort(MPI_COMM_WORLD, 1);
+#else
+    std::abort();
+#endif
+  }
+}
+
+const std::string Log::getTag(std::string const val) {
   auto start = val.find(" ")+1, end = val.find("(");  // for funcs w type
   start = (start > end) ? 0 : start;                  // fix for funcs w/o type
   return "["+val.substr(start, end - start)+"] ";
 }
 
-bool Logger::instanceFlag = false;
-Logger* Logger::single = NULL;
-
-Logger* Logger::getInstance ( int *argc, char*** argv) {
-  if(!instanceFlag){
-    single = new Logger(argc, argv);
-    instanceFlag=true;
-    return single;
-  } else {
-    return single;
-  }
-}
-
-Logger* Logger::getInstance () {
-  if(!instanceFlag) {
-    cerr << "ERROR" << ": Logger::getInstance(...,...) is not initialized: call getInstance(argc,argv) first!"  << std::endl;
-    abort();
-  }
-  return single;
-}
-
-Logger::Logger(int *argc, char*** argv) {
-  verb_ = cverb_ = 0;
-  pario_ = false;
+int Log::mpiSize() {
+  int totalRanks = 1;
 #ifdef MPICODE
-  MPI_Init(argc, argv);
-  MPI_Comm_size(MPI_COMM_WORLD,&nprocs_);
-  MPI_Comm_rank(MPI_COMM_WORLD,&myrank_);
-  if(master()){ffs_.open("log", ios_base::out);}
-  Logo();
-  (*this)<<TAG<< "\n\tVersion: MPI with "<< nprocs_ << " tasks, ";
-#else
-  argc = argc; argv = argv;
-  nprocs_=1; myrank_=0;
-  ffs_.open("log", ios_base::out);
-  Logo();
-  *(this)<<TAG <<"\n\tVersion  : Serial";
+  MPI_Comm_size(MPI_COMM_WORLD,&totalRanks);
 #endif
-#ifndef NDEBUG
-  *(this)<<"\n\tDebug    : ON";
-#endif
-  *(this)<<"\n\tFields   : "<<FLD_TOT;
-  *(this)<<"\n\tPhysics  : "<< (PHYSICS ? "GRMHD":"MHD");
-#ifdef SINGLE_PRECISION
-  *(this)<<"\n\tPrecision: Single";
-#else
-  *(this)<<"\n\tPrecision: Double";
-#endif
-  *(this)<<"\n\tRK Order : "<<NRK;
-  *(this)<<"\n\tRec Order: "<<REC_ORDER;
-#if REC_ORDER==5
-  *(this)<<"\n\tRec Type : MP5";
-#else
-  *(this)<<"\n\tRec Type : "<<RECONSTR;
-#endif
-  *(this)<<"\n\tNGC      : "<<NGC;
-  this->fl();
-  barrier();
-  time.init();
-}
+  return totalRanks;
+};
 
-Logger::~Logger(){  exit(EXIT_SUCCESS); }
-
-bool Logger::master() {
-  if(myrank_ == 0) return true; else return false;
-}
-
-void Logger::Info(int level, const char *msg, ... ) {
-    va_list argptr;
-    char message[2048];
-    if(level > verb_) return;
-
-    va_start(argptr,msg);
-    vsprintf(message, msg, argptr );
-    va_end(argptr);
-
-    if( master() ) {
-      cout << "I: ";
-      for( int i = 0; i < level; i++ ) cout << " ";
-      cout << message;
-       message[0] = '\0';
-      cout << flush;
-    }
-    barrier();
-}
-
-void Logger::Write(const char *msg, ... ){
-    va_list argptr;
-    char message[2048];
-
-    va_start(argptr, msg);
-    vsprintf(message, msg, argptr );
-    va_end(argptr);
-
-    cout << message;
-    cout << std::flush;
-    barrier();
-}
-
-void Logger::Error (const char *msg, ... ) {
-    va_list argptr;
-    char message[2048];
-    va_start ( argptr, msg);
-    vsprintf ( message, msg, argptr );
-    va_end(argptr);
-
-    if( master() ) {
-      cerr << "ERROR" << ": FatalException: " << message << std::endl;
-    }
-    message[0] = '\0';
-
+int Log::mpiRank() {
+  int rank = 0;
 #ifdef MPICODE
-    int rv = -1;
-    MPI_Abort(MPI_COMM_WORLD,rv);
-    MPI_Finalize();
+  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 #endif
-    abort();
-}
+  return rank;
+};
 
-void Logger::Debug(const char *msg, ... ) {
-#ifndef NDEBUG
-  va_list argptr;
-  char message[2048];
-  va_start(argptr,msg);
-  vsprintf(message, msg, argptr );
-  va_end(argptr);
-  cout << "D: ";
-  cout << message;
+int Log::mpiRanksPerNode() {
+  static int cachedMpiRanksPerNode;
+  if (cachedMpiRanksPerNode == 0) {
+#ifdef MPICODE
+    int ranksPerNode;
+    MPI_Comm nodeComm;
+    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &nodeComm);
+    MPI_Comm_size(nodeComm, &ranksPerNode);
+    cachedMpiRanksPerNode = ranksPerNode;
+#else
+    cachedMpiRanksPerNode = 1;
 #endif
-}
 
-void Logger::barrier(){
+  }
+  return cachedMpiRanksPerNode;
+};
+
+bool Log::isMaster() { return 0 == mpiRank(); };
+
+void Log::barrier(){
 #ifdef MPICODE
   MPI_Barrier(MPI_COMM_WORLD);
 #endif
 }
 
-void Logger::cleanup(){
-  barrier();
-  *this<<TAG<<"Final cleanup. Total runtime [s]: "<< time.lap(); fl();
-#ifdef MPICODE
-  MPI_Finalize();
+
+void Log::togglePcontrol(int onOff){
+#ifdef VTUNE_API_AVAILABLE
+  if(!onOff){ __itt_pause (); }
+  else      { __itt_resume(); }
 #endif
-  //el();
-  if(master()){ ffs_.close();}
-  delete this;
+#ifdef MPICODE
+  MPI_Pcontrol(onOff);
+#endif
 }
 
-void Logger::Logo(){
-  *this+0<<"    ____   ____   ______       __          \n";
-  *this+0<<"   / __ \\ / __ \\ / ____/_____ / /_   ____  \n";
-  *this+0<<"  / / / // /_/ // __/  / ___// __ \\ / __ \\ \n";
-  *this+0<<" / /_/ // ____// /___ / /__ / / / // /_/ / \n";
-  *this+0<<"/_____//_/    /_____/ \\___//_/ /_/ \\____/  \n";
-  fl();
+void Log::logo(){
+  Log::cout(4)<<"    ____   ____   ______       __           \n"
+              <<"   / __ \\ / __ \\ / ____/_____ / /_   ____ \n"
+              <<"  / / / // /_/ // __/  / ___// __ \\ / __ \\\n"
+              <<" / /_/ // ____// /___ / /__ / / / // /_/ /  \n"
+              <<"/_____//_/    /_____/ \\___//_/ /_/ \\____/ \n"<<Log::endl;
 }
+
+

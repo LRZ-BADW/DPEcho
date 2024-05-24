@@ -1,7 +1,7 @@
-// Howto: copy or link in the binary's folder, named echo.par
-// Logger
+//-- Howto: copy or link in the binary's folder, named dpecho.par
+//- Logger
 logVerb 4
-// Domain
+//- Domain
 xMin -0.5
 xMax  0.5
 yMin -0.5
@@ -11,21 +11,26 @@ zMax  0.5
 Rx 0
 Ry 0
 Rz 0
-// Grid
-Mx 64
-My 64
-Mz 64
-Hx 2
-Hy 2
-Hz 2
-// Problem
+//- Grid
+Mx 256
+My 256
+Mz 256
+Hx 4
+Hy 4
+Hz 4
+//- Problem
 nStep 21
-tOut 0.1
-// Problem::Alfven
+tOut 1
+problem Alfven
+// problem Uniform
 alfLx 1
 alfLy 1
 alfLz 1
-// SYCL
-locSize 8
-// Debug
-dumpHalos 0
+//- SYCL
+// wgMax 6
+// deviceSelection RoundRobin
+// deviceSelection default
+// deviceOffset 0
+// deviceCount 1
+//- Debug
+// dumpHalos 1

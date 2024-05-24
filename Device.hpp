@@ -8,25 +8,33 @@
 //  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific
 //  language governing permissions and limitations under the License.
 
-#ifndef _DeviceConfig_hpp_
-#define _DeviceConfig_hpp_
+#ifndef _Device_hpp_
+#define _Device_hpp_
 
 #pragma once
 
-#include "echoSycl.hpp"
+#include "Parameters.hpp"
 
-struct DeviceConfig {
+#include <sycl/sycl.hpp>
+
+//- Device  Selection
+#define DEV_DEF  0
+#define DEV_CPU  1
+#define DEV_GPU  2
+#define DEV_ACC  3
+
+struct Device {
   private:
-    std::vector<device> devices;
+    std::vector<sycl::device> devices;
 
   public:
-    DeviceConfig();
-    void printTargetInfo(mysycl::device);
+    Device();
+    void printTargetInfo(sycl::device);
     void listDevices();
-    device deviceWith(int imd);
-    device debugDevice();
-    std::vector<device> gpus();
-    std::vector<device> cpus();
+    sycl::device deviceWith(Parameters &p);
+    sycl::device debugDevice();
+    std::vector<sycl::device> gpus();
+    std::vector<sycl::device> cpus();
 };
 
 #endif

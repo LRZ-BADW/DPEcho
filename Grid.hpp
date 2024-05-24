@@ -12,26 +12,16 @@
 #ifndef _Grid_hpp_
 #define _Grid_hpp_
 
-#include "echo.hpp"
-#include "Logger.hpp"
 #include "utils/tb-types.hpp"
+#include "echo.hpp"
 
-#include "echoSycl.hpp"
-
-/* TODO: Put something like this there!
-enum class PositionInCell {
-  CENTER, X_BORDER, Y_BORDER, Z_BORDER
-};
-
-or this
-
-int const POS_CENTER = 0;
-*/
+#include <sycl/sycl.hpp>
+#include <numeric>
 
 class Grid {
 
-  public:
-    const int n[3], h[3], nh[3], nt, nht; // All numbers of points along the 3 directions
+  public: // All numbers of points along the 3 directions
+    const int n[3], h[3], nh[3], nt, nht;
     const field xMin[3], xMax[3], dx[3], hMin[3], hMax[3];  // Physical point distances
 
     Grid(int, int, int, int, int, int, field, field, field, field, field, field);
@@ -41,44 +31,51 @@ class Grid {
     //-- Device code: beware the indexing!
     // Retrieve cell Coordinates (USE INNER grid indexing, a.k.a NH indexing!!)
     // If it the parallel_for range is NOT NH, add proper offsets to global_id() to get i3
-    inline const field xL (     id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] * i3[myDir]      ; }
-    inline const field xC (     id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] *(i3[myDir]+0.5f); }
-    inline const field xR (     id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] *(i3[myDir]+1.0f); }
+    inline field xL (     sycl::id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] * i3[myDir]     ; }
+    inline field xC (     sycl::id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] *(i3[myDir]+0.5); }
+    inline field xR (     sycl::id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] *(i3[myDir]+1.0); }
     // Convenient shortcuts when parallel_for range is NH, you can just pass the nd_item
-    inline const field xL (nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] * it.get_global_id(myDir)      ; }
-    inline const field xC (nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+0.5f); }
-    inline const field xR (nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+1.0f); }
+    inline field xL (sycl::nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] * it.get_global_id(myDir)     ; }
+    inline field xC (sycl::nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+0.5); }
+    inline field xR (sycl::nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+1.0); }
     // Same as above, but for full WH indexing (based on hMin values)
-    inline const field xLh(nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] * it.get_global_id(myDir)      ; }
-    inline const field xCh(nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+0.5f); }
-    inline const field xRh(nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+1.0f); }
-
-    // put some grid id to position in 3d calculator here
-    /*
-    if constexpr (pos == PositionInCell::CENTER) {
-
-    } else if constexpr (pos == PositionInCell::X_BORDER) {
-    } else if constexpr (pos == PositionInCell::X_BORDER) {
-    } else if constexpr (pos == PositionInCell::X_BORDER) {
-    } else {
-      coords[0] = 0.0;
-      coords[1] = 0.0;
-      coords[2] = 0.0;
-    }*/
+    inline field xLh(sycl::nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] * it.get_global_id(myDir)     ; }
+    inline field xCh(sycl::nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+0.5); }
+    inline field xRh(sycl::nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+1.0); }
 };
 
 //-- General Indexing methods (work for any SYCL range, not just the grid!)
 // Call in parallel_for. Calculate most general linear index to access arrays
 // Offset can be positive or negative. Positve -> target array starts before parallel_for range.
-inline int globLinId(   id<3> myId, const int arrRange[3], const int relOffset[3]) {
+
+// This version uses sycl::ids for the offset calculation.
+inline size_t globLinId(sycl::id<3> const baseId, sycl::range<3> const r, sycl::id<3> const offset) {
+  sycl::id<3> id = baseId + offset;
+  return id[2] + id[1] * r[2] + id[0] * r[1] * r[2];
+}
+
+// this one uses int arrays. They should do the same thing.
+inline int globLinId(   sycl::id<3> myId, const int arrRange[3], const int relOffset[3]) {
   myId[0]+= relOffset[0]; myId[1]+= relOffset[1];  myId[2]+= relOffset[2];// Offset to recenter your indexing
   return myId[2] + myId[1]*arrRange[2] + myId[0]*arrRange[1]*arrRange[2]; // From SYCL API. Updating this line updates all.
 }
 
-inline int stride(id<3> id, int myDir, const int arrRange[3]){
-  int off[] = {0, 0, 0}; auto id0 = globLinId(id, arrRange, off);
-  off[myDir]= 1;         auto id1 = globLinId(id, arrRange, off);
-  return id1 - id0; // Wasteful but SAFE(r)
+inline int stride(sycl::id<3> id, int myDir, const int arrRange[3]){
+  return 1 * !!(myDir == 2) +  arrRange[2] * !!(myDir == 1) + arrRange[1] * arrRange[2] * !!(myDir == 0);
 }
+
+inline size_t nextMultiple(size_t x, size_t n) {
+  return ((x + n - 1) / n) * n;
+}
+
+inline sycl::nd_range<3> getMatchingNdRange(sycl::range<3> const &rGlob, sycl::range<3> const &rLoc) {
+  sycl::range<3> rGlobFit(nextMultiple(rGlob[0], rLoc[0]), nextMultiple(rGlob[1], rLoc[1]), nextMultiple(rGlob[2], rLoc[2]));
+  return sycl::nd_range<3>(rGlobFit, rLoc);
+}
+
+inline bool isOutOfBounds(sycl::id<3> const id, sycl::range<3> const range) {
+  return id[0] >= range[0] || id[1] >= range[1] || id[2] >= range[2];
+}
+
 
 #endif

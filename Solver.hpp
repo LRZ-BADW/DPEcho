@@ -14,7 +14,7 @@
 #include "echo.hpp"
 #include "utils/tb-types.hpp"
 
-#include "echoSycl.hpp"
+#include <sycl/sycl.hpp>
 
 #if NRK==1
 const float crk1[] = {0.0};

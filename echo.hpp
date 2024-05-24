@@ -14,6 +14,9 @@
 #define _USE_MATH_DEFINES
 #define MAX(x,y) ((x>y)?x:y)
 
+#define NDIM 3
+
+
 //-- Field numbering
 #ifndef FLD_TOT
 #define RH 0
@@ -29,6 +32,13 @@
 #define FLD_TOT 8 // (FLD_SCA + 3*FLD_VEC)  Tot fields
 #endif
 
+#ifdef MPICODE
+#define SR_REPLACE 1
+#define SENDRECV 2
+#define ISEND 3
+#define START 4
+#endif
+
 //-- Holib stuff
 #ifdef  RECONSTR
 #define NO 0
@@ -40,6 +50,8 @@
 
 //-- Boundary conditions
 #define BCPER 1 // Periodic
+#define BCOF0 2 // Outflow w 0th order interpolation
+#define BCOF3 3 // Outflow w 3rd order interpolation
 #define BCUNK 5 // Unknown
 
 //-- EoS
@@ -71,6 +83,6 @@
 #define REC_TOTAL_POINTS 1
 #endif
 
-#define NGC MAX( (FD/2),(REC_RIGHT_OFFSET) )
+#define NGC MAX( (FD/2)+1,(REC_RIGHT_OFFSET)+1 )
 
 #endif

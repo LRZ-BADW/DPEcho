@@ -9,66 +9,64 @@
 //  language governing permissions and limitations under the License.
 
 #include "Solver.hpp"
-
 #include "Physics.hpp"
 #include "Metric.hpp"
 
+using namespace sycl;
 
 //-- Derivation from staggered f_{i-ngc:i+ngc-1} to cell-centered hat f_{i}
 SYCL_EXTERNAL field holibDer(int myId, field *var, int stride){
+  myId+=stride;
 #ifndef FD // Same as FD==2
   return var[myId]-var[myId-stride];
-#else
-#if   FD==2 //-- 2nd order derivation (ngc=1 required)
+#elif   FD==2 //-- 2nd order derivation (ngc=1 required)
   const field d0  = -1.0, d1 = 1.0;
   const field d[] = {d0, d1};
-#elif FD==4 //-- 4th order derivation (ngc=2 required)
+#elif   FD==4 //-- 4th order derivation (ngc=2 required)
   const field d0  = 13.0/12.0, d2 = -1.0/24.;
   const field d[] = {-d2,d2-d0,d0-d2,d2};
-#elif FD==6 //-- 6th order derivation (ngc=3 required)
+#elif   FD==6 //-- 6th order derivation (ngc=3 required)
   const field d0 = 1067/960., d2=-29/480., d4=3/640.;
   const field d[]={-d4,d4-d2,d2-d0,d0-d2,d2-d4,d4};
-#endif // on FD values
+#endif        // on FD values
   field  sum=0.0;
   for(int i=0; i<FD;++i){ sum+= d[i] * var[myId+stride*(i-FD/2)];}
   return sum;
-#endif // ifndef FD
 }
 
 //-- Reconstruction Filters
-
 SYCL_EXTERNAL inline field holibPhi(field r){ //-- rec of echo-mini, may be dropped
 #if RECONSTR==NO
   return 0.0;
 #elif RECONSTR==LINEAR
   return 1.0; // Linear, mostly for debug
 #elif RECONSTR==MINMOD
-  return mysycl::max(0.0, mysycl::min(1.0, r)); // minmod
+  return sycl::max(0.0, sycl::min(1.0, r)); // minmod
 #elif RECONSTR==MONCEN
-  field tmin = mysycl::min(2.0*r, 0.5*(1.0 + r));
-  return mysycl::max(0.0, mysycl::min(tmin, 2.0)); // monotonized central
+  field tmin = sycl::min(2.0*r, 0.5*(1.0 + r));
+  return sycl::max(0.0, sycl::min(tmin, 2.0)); // monotonized central
 #elif RECONSTR==VANLEER
-  return (r + abs(r))/(1. + abs(r));  // van Leer
+  return (r + sycl::fabs(r))/(1. + sucl::fabs(r));  // van Leer
 #else
   return 0.0;
 #endif
 }
 
 SYCL_EXTERNAL inline field mm2(field d1, field d2){
-  return (d1*d2 <=0)? 0.0 : sign(d1) * mysycl::fmin(mysycl::fabs(d1), mysycl::fabs(d2));
+  return (d1*d2 <=0)? 0.0 : sign(d1) * sycl::fmin(sycl::fabs(d1), sycl::fabs(d2));
 }
 
 SYCL_EXTERNAL inline field mc2(field d1, field d2) {
   field  coeff = ((d1*d2 <=0)? 0.0 : sign(d1));
-  return coeff * mysycl::fmin(2*mysycl::fabs(d1), mysycl::fmin(2*mysycl::fabs(d2), 0.5*mysycl::fabs(d1+d2)));
+  return coeff * sycl::fmin(2*sycl::fabs(d1), sycl::fmin(2*sycl::fabs(d2), 0.5*sycl::fabs(d1+d2)));
 }
 
 SYCL_EXTERNAL inline field mm4(field d1, field d2, field d3, field d4) {
   field s1 = sign(d1), s2 = sign(d2), s3 = sign(d3), s4 = sign(d4);
-  field signCalc = (s1+s2)* mysycl::fabs((s1 + s3) * (s1 + s4));
+  field signCalc = (s1+s2)* sycl::fabs((s1 + s3) * (s1 + s4));
 
-  return 0.125 * signCalc * mysycl::fmin( mysycl::fmin(mysycl::fabs(d1), mysycl::fabs(d2)),
-					  mysycl::fmin(mysycl::fabs(d3), mysycl::fabs(d4)) );
+  return 0.125 * signCalc * sycl::fmin( sycl::fmin(sycl::fabs(d1), sycl::fabs(d2)),
+					  sycl::fmin(sycl::fabs(d3), sycl::fabs(d4)) );
 }
 
 SYCL_EXTERNAL inline field mp5(field f, field f1, field f2, field f3, field f4, field f5) {
@@ -88,8 +86,8 @@ SYCL_EXTERNAL inline field mp5(field f, field f1, field f2, field f3, field f4, 
     dp = f3-2*f4+f5;
     fmd = .5*(f3+f4)-.5*mm4(4*d0-dp,4*dp-d0,d0,dp);
     flc = f3+.5*(f3-f2)+(4./3.)*mm4(4*d0-dm,4*dm-d0,d0,dm);
-    myfmin = mysycl::fmax( mysycl::fmin(f3, mysycl::fmin(f4,fmd)), mysycl::fmin(f3, mysycl::fmin(ful,flc)) );
-    myfmax = mysycl::fmin( mysycl::fmax(mysycl::fmax(f3,f4), fmd), mysycl::fmax(mysycl::fmax(f3,ful), flc) );
+    myfmin = sycl::fmax( sycl::fmin(f3, sycl::fmin(f4,fmd)), sycl::fmin(f3, sycl::fmin(ful,flc)) );
+    myfmax = sycl::fmin( sycl::fmax(sycl::fmax(f3,f4), fmd), sycl::fmax(sycl::fmax(f3,ful), flc) );
     return f + mm2(myfmin-f, myfmax-f);
   }
 }

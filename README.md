@@ -50,13 +50,17 @@ make
 Simulation parameters such as order of derivation, type of simulation (MHD or GR-MHD) or type of execution device may be edited in the CCMake command line UI.
 Other parameters may be set at runtime.
 An example parameter file is shown at [the example parameter file alfven.par](examples/alfven.par).
-As a default behavior, DPEcho expects a parameter file called **echo.par** in its working directory.
+As a default behavior, DPEcho expects a parameter file called **dpecho.par** in its working directory.
 The path to an alternative file may also be passed as a commandline argument.
 
 ## Known Issues
 
 * NVIDIA GPUs report out of resources with automatic kernel invocations. Defaulting to manual workgroup size specification.
-* AMD GPUs and MPI are currently untested.
+
+* AMD GPU support through OpenSYCL requires GPU-aware-MPI and must be configured for a specific architecture. E.g.:
+```bash
+CXX=$ROCM_PATH/llvm/bin/clang cmake -DSYCL=OpenSYCL -DSYCL_DEVICE=GPU -DSYCL_ARCH=AMD -DCMAKE_CXX_FLAGS="--offload-arch=gfx90a" ..
+```
 
 ## References
 

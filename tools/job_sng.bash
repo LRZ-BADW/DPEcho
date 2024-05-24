@@ -1,12 +1,15 @@
 #!/bin/bash
 #SBATCH -J echo
-#SBATCH -A pr28fa
+#SBATCH -A <yourProject>
 #SBATCH --nodes=1
-#SBATCH --partition=tmp0 --qos=nolimit
+#SBATCH --partition=test -t 30
 
+module purge
 module load slurm_setup
+module load spack/23
+module load intel-toolkit
 source ../LRZoneAPI.sh # Takes care of modules
 
-./echo
+./dpecho_gpu
 
 exit

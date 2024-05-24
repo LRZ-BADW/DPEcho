@@ -11,6 +11,9 @@
 #include "Physics.hpp"
 #include "Metric.hpp"
 
+using namespace sycl;
+
+
 //-- Manual 3-vectors operation in GR
 SYCL_EXTERNAL void matMul(field m[9], field *vIn, field *vOut,  id<1> gid, unsigned offset){
   const unsigned id0 = gid[0], id1 = id0+offset, id2 = id1+offset;
@@ -49,7 +52,7 @@ SYCL_EXTERNAL void prim2cons(id<1> myId, unsigned n, field_array v, field_array 
 #elif PHYSICS==GRMHD
   field rh=v[RH][gid], pg=v[PG][gid];
 
-  field vCon[]={v[VX][gid], v[VY][gid], v[VZ][gid]}, vCov[3]; g.con2Cov(vCon, vCov); field u2=dot(vCon,vCov); field glf=mysycl::sqrt(1.0+u2);
+  field vCon[]={v[VX][gid], v[VY][gid], v[VZ][gid]}, vCov[3]; g.con2Cov(vCon, vCov); field u2=dot(vCon,vCov); field glf=sycl::sqrt(1.0+u2);
   field bCon[]={v[BX][gid], v[BY][gid], v[BZ][gid]}, bCov[3]; g.con2Cov(bCon, bCov); field b2=dot(bCon,bCov);
   vCov[0] *= 1.0/glf; vCov[1] *= 1.0/glf; vCov[2] *= 1.0/glf;
   vCon[0] *= 1.0/glf; vCon[1] *= 1.0/glf; vCon[2] *= 1.0/glf;
@@ -72,7 +75,7 @@ SYCL_EXTERNAL void prim2cons(id<1> myId, unsigned n, field_array v, field_array 
 
 SYCL_EXTERNAL void cons2prim(id<1> myId, unsigned n, field_array u, field_array v, Metric &g){
   unsigned const gid = myId[0];
-  field const gDet1 = 1./g.gDet();
+  field const gDet1 = g.gDet1();
   field sCov[3]={u[VX][gid]*gDet1,u[VY][gid]*gDet1,u[VZ][gid]*gDet1},  sCon[3];  g.cov2Con(sCov, sCon);  field s2=dot(sCov, sCon);
   field bCon[3]={u[BX][gid]*gDet1,u[BY][gid]*gDet1,u[BZ][gid]*gDet1},  bCov[3];  g.con2Cov(bCon, bCov);  field b2=dot(bCov, bCon);
 
@@ -83,27 +86,27 @@ SYCL_EXTERNAL void cons2prim(id<1> myId, unsigned n, field_array u, field_array 
   v[BX][gid] = bCon[0]    ; v[BY][gid] = bCon[1]    ;  v[BZ][gid] = bCon[2]    ;
 
 #elif PHYSICS==GRMHD
-  field sb=dot(sCov,bCon),  sb2=sb*sb,  b2st2=mysycl::max(s2*b2-sb2, 0.);
+  field sb=dot(sCov,bCon),  sb2=sb*sb,  b2st2=sycl::max(s2*b2-sb2, 0.);
   field d=u[RH][gid]*gDet1, et1=u[PG][gid]*gDet1, w1, u2, glf;
 
   // The folowing two are alternative: Initial guess from old values ...
-  //field uCon[] = {v[VX][gid], v[VY][gid], v[VZ][gid]},  uCov[3];  g.con2Cov(uCon, uCov);  field u2=dot(uCov,uCon);  glf=mysycl::sqrt(1.+u2);
+  //field uCon[] = {v[VX][gid], v[VY][gid], v[VZ][gid]},  uCov[3];  g.con2Cov(uCon, uCov);  field u2=dot(uCov,uCon);  glf=sycl::sqrt(1.+u2);
   //w1 = d*u2/(1.0+glf)+GAMMA1*v[PG][gid]*glf*glf;
-  // ... OR from quadratic equation (TODO: comment either or put a CMake switch)
+  // ... OR from quadratic equation (usually better)
   field com = (et1+d-b2);   w1 = 4.*com*com - 3.*(s2-b2*(2.*et1+d-b2));
-  w1 = mysycl::max( (2.*com+mysycl::sqrt(mysycl::max(w1,0.)))/3.-d,  0.);
+  w1 = sycl::max( (2.*com+sycl::sqrt(sycl::max(w1,0.)))/3.-d,  0.);
 
-  //-- Undetermined iteration. TODO: is there a SYCL tool for such cases?  (ALL LOCAL, luckily).
+  //-- Undetermined iteration. ALL LOCAL, luckily
   field w, vv2, pg, fw, dv2, dpg, dfw, dw1;  const field tol=1.e-9;
   for(unsigned iter=0; iter<20; ++iter){
-    w  = w1+d;  vv2 = w*w*s2+(2.*w+b2)*sb2;   com = w*(w+b2);  u2 = vv2/(com*com-vv2); glf = mysycl::sqrt(1.+u2);
+    w  = w1+d;  vv2 = w*w*s2+(2.*w+b2)*sb2;   com = w*(w+b2);  u2 = vv2/(com*com-vv2); glf = sycl::sqrt(1.+u2);
     pg = (w1-d*u2/(1.+glf))/(GAMMA1*glf*glf); com = w+b2;      fw = w1-et1-pg + .5*(b2 + b2st2/(com*com));
     dv2 = -2.*( s2+sb2* (3.*w*(com)+b2*b2)/(w*w*w) )/ (com*com*com);
     dpg = 1./(GAMMA1*glf*glf) - glf*(.5*d/GAMMA1+glf*pg)*dv2;  dfw = 1.-dpg-b2st2/(com*com*com);  dw1 = -fw/dfw;
-    if (abs(dw1) < tol*w1){ break; }else{ w1+= dw1;}
+    if (sycl::fabs(dw1) < tol*w1){ break; }else{ w1+= dw1;}
   }
 
-  field rh = d/glf;  pg = mysycl::max(pg, (field)PGFLOOR);
+  field rh = d/glf;  pg = sycl::max(pg, (field)PGFLOOR);
   field vCon[3]={ (sCon[0]+sb*bCon[0]/w)/(w+b2), (sCon[1]+sb*bCon[1]/w)/(w+b2), (sCon[2]+sb*bCon[2]/w)/(w+b2)};
 
   v[RH][gid] = rh;          v[PG][gid] = pg;
@@ -116,11 +119,10 @@ SYCL_EXTERNAL void cons2prim(id<1> myId, unsigned n, field_array u, field_array 
 
 //-- Fluxes and characteristic velocities.
 //    IMPORTANT: all local quantities, they have been sampled --> access simply by eg. f[VX]
-void physicalFlux(int dir, Metric &g, field vD[FLD_TOT], field uD[FLD_TOT], field f[FLD_TOT], field vf[2], field vt[2] ){
-  field alpha = g.alpha(), betai[3], gCov[9], gCon[9];
-  g.beta(betai);
-  g.g3DCov(gCov);
-  field const gDet =  g.g3DCon(gCon);
+SYCL_EXTERNAL void physicalFlux(int dir, Metric &g, field vD[FLD_TOT], field uD[FLD_TOT], field f[FLD_TOT], field vf[2], field vt[2] ){
+
+  field betai[3], gCov[9], gCon[9];     g.g3DCov(gCov); g.beta(betai);
+  field const alpha = g.alpha(), gDet = g.g3DCon(gCon);
 
   const short k1 = (dir+1)-1, k2 = ((dir+1)%3)-1, k3 = ((dir+2)%3)-2;
 
@@ -147,7 +149,7 @@ void physicalFlux(int dir, Metric &g, field vD[FLD_TOT], field uD[FLD_TOT], fiel
   //-- Fast magnetosonic speeds (vCon along direction dir)
   const field c2 = GAMMA *pg, a2 = c2+b2;
   const field comfort = gCon[dir+3*dir]*a2*a2 - 4.0*c2*bCon[dir]*bCon[dir];
-  const field vfd = mysycl::sqrt( 0.5*( a2+mysycl::sqrt( mysycl::max((field)0.0,(field)comfort) ) )/rh );
+  const field vfd = sycl::sqrt( 0.5*( a2+sycl::sqrt( sycl::max((field)0.0,(field)comfort) ) )/rh );
   vf[0] = vCon[dir]+vfd;  vf[1] = vCon[dir]-vfd;
 
   //-- Transverse speeds
@@ -158,7 +160,7 @@ void physicalFlux(int dir, Metric &g, field vD[FLD_TOT], field uD[FLD_TOT], fiel
   //-- Assignments
   field rh = vD[RH], pg = vD[PG], vCon[] = {vD[VX], vD[VY], vD[VZ]}, bCon[] = {vD[BX], vD[BY], vD[BZ]};
   field vCov[3], bCov[3];         matMul(gCov, vCon, vCov);  matMul(gCov, bCon,  bCov);
-  const field u2 = dot(vCov,vCon), b2 = dot(bCon,bCov),  glfInv = mysycl::rsqrt(1+u2), glf = 1.0/glfInv;
+  const field u2 = dot(vCov,vCon), b2 = dot(bCon,bCov),  glfInv = sycl::rsqrt(1+u2), glf = 1.0/glfInv;
   vCon[0] *= glfInv;  vCon[1] *= glfInv;  vCon[2] *= glfInv;
   vCov[0] *= glfInv;  vCov[1] *= glfInv;  vCov[2] *= glfInv;
 
@@ -197,9 +199,9 @@ void physicalFlux(int dir, Metric &g, field vD[FLD_TOT], field uD[FLD_TOT], fiel
   f[BX+k1] = 0.0;      f[BY+k2] =-eCov[2+k3];    f[BZ+k3] = eCov[1+k2];
 
   //-- Fast magnetosonic speeds (vCon along direction dir)
-  const field cs2=GAMMA*pg/h, ca2=1.0-h/(h+mysycl::max(b2-e2,0.)),  a2=cs2+ca2-cs2*ca2,  v2 = u2/(1.0+u2);
+  const field cs2=GAMMA*pg/h, ca2=1.0-h/(h+sycl::max(b2-e2,0.)),  a2=cs2+ca2-cs2*ca2,  v2 = u2/(1.0+u2);
   const field vf1 = vCon[dir]*(1.0-a2)/(1.0-v2*a2);
-  const field vf2 = mysycl::sqrt( a2*glfInv*glfInv* ( (1.-v2*a2)*gCon[4*dir]-(1.-a2)*vCon[dir]*vCon[dir]))/(1.-v2*a2);
+  const field vf2 = sycl::sqrt( a2*glfInv*glfInv* ( (1.-v2*a2)*gCon[4*dir]-(1.-a2)*vCon[dir]*vCon[dir]))/(1.-v2*a2);
   vf[0] = alpha*(vf1+vf2)-betai[dir];
   vf[1] = alpha*(vf1-vf2)-betai[dir];
 
@@ -208,5 +210,69 @@ void physicalFlux(int dir, Metric &g, field vD[FLD_TOT], field uD[FLD_TOT], fiel
   vt[1] = alpha*vCon[2+k3]-betai[2+k3];
 
 #endif // PHYSICS
+}
 
+//  IMPORTANT: all cell-centered quantities here, take from the v!
+void physicalSource(id<1> myId, field_array v, Metric &g, field src[4]){
+
+#if METRIC > CARTESIAN
+  for(short unsigned i=0; i<4; i++){ src[i] = 0; }; return;
+
+#else
+  field ssCon[3][3];
+  //-- Metric components
+  field betai[3], gCov[9], gCon[9]; g.g3DCov(gCov); g.beta(betai);
+  field const alpha=g.alpha(), gDet=g.g3DCon(gCon), gDet1=g.gDet1();
+  //-- Readouts (all cell-centered values, unlike in physicalFlux)
+  const field rh=v[RH][myId], pg=v[PG][myId];
+  field bCov[3], bCon[]={v[BX][myId],v[BY][myId],v[BZ][myId]};
+  matMul(gCov, bCon, bCov); const field b2 = dot(bCon,bCov);
+
+#if PHYSICS==MHD
+  const field pt=pg+.5*b2, et=rh, vCon[]={v[VX][myId],v[VY][myId],v[VZ][myId]};
+  field sCon[3] = {rh*vCon[0], rh*vCon[1], rh*vCon[2]};
+  for(short unsigned i=0; i<3; i++)
+    for(short unsigned j=0; j<3; j++)
+      ssCon[i][j] = rh*vCon[i]*vCon[j]-bCon[i]*bCon[j]+pt*gCon[i*3+j];
+
+#elif PHYSICS==GRMHD
+  field vCov[3], vCon[]={v[VX][myId],v[VY][myId],v[VZ][myId]}; matMul(gCov, vCon, vCov);
+  const field u2 = dot(vCov,vCon), glfInv = sycl::rsqrt(1+u2), glf = 1.0/glfInv;
+  for(short unsigned i=0; i<3; i++){ vCon[i]*= glfInv; vCov[i]*= glfInv;}
+  field eCov[3]; cross (vCon, bCon, eCov); eCov[0]*=-gDet;  eCov[1]*=-gDet;  eCov[2]*=-gDet;
+  field eCon[3]; matMul(gCon, eCov, eCon); const field e2 = dot(eCov,eCon);
+  const field d=rh/glfInv, h=rh+GAMMA1*pg, w=h*glf*glf, uem=0.5*(e2+b2), pt=pg+uem, et=w-pg+uem;
+
+  field sCon[3]; cross (eCov, bCov, sCon); //was: s_con=w*v_con+g%det1*cross_product(e_cov,b_cov)
+  for(short unsigned i=0; i<3; i++){ sCon[i] = gDet1*sCon[i]+ w*vCon[i];}
+
+  for(short unsigned i=0; i<3; i++)
+    for(short unsigned j=0; j<3; j++)
+      ssCon[i][j] = w*vCon[i]*vCon[j]+pt*g.gCon(i,j)-bCon[i]*bCon[j]-eCon[i]*eCon[j];
+
+#endif // PHYSICS
+  // WARNING: source tested only for CARTESIAN case (trivial!)
+  // This was in mod_metric::source. Executed only once, so let's just have it here. -SC
+  field sum1[3] = {0.0, 0.0, 0.0}, sum2 = 0.0;
+  for(short unsigned i=0; i<3; i++)
+    for(short unsigned j=0; j<3; j++)
+      for(short unsigned iS=0; iS<3; iS++){
+        sum1[iS]+=          0.5*ssCon[i ][j] *g.dgCov(i,j,iS); // sum1(1:3)=sum1(1:3)+0.5*ss_con(i,j)*dg%cov(i,j,1:3)
+        sum2    += gCov[i*3+iS]*ssCon[iS][j] *g.dgBeta(i,j);   // sum2=sum2+dot_product(g%cov(i,:),ss_con(:,j))*dg%beta(i,j)
+      }
+  field sCov[3]; matMul(gCov,sCon,sCov);
+  //  source(1:3)=g%alpha*sum1+matmul(s_cov,dg%beta)-et*dg%alpha
+  for(short unsigned iS=0; iS<3; iS++){
+    src[iS] = g.alpha()*sum1[iS] - et*g.dgAlpha(iS);
+    for(short unsigned k=0; k<3; k++){ src[iS]+= sCov[k] * g.dgBeta(k,iS); }
+  }
+  //  source(4)  =dot_product(g%beta,sum1)+sum2-dot_product(s_con,dg%alpha)
+  src[3] = sum2;
+  for(short unsigned k=0; k<3; k++){ src[3]+= betai[k]*sum1[k]-sCon[k]*g.dgAlpha(k); }
+
+  // This was located back in physics_source.
+  for(short unsigned iS=0; iS<4; iS++){ src[iS]*= gDet; }
+  return;
+
+#endif // METRIC type
 }
