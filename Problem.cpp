@@ -58,7 +58,7 @@ void Problem::dtUpdate(field aMax){
     Log::cerr(0)<< std::defaultfloat << Log::mpiSize() <<" "<< round(cbrt(cells * Log::mpiSize())) <<" "
                  << std::scientific   << wallT_<<" " <<spec <<" "<< Log::mpiSize() * spec
 #ifdef TB_ENERGY
-                 << " " << (stepTime_.lastEnergyReading() / (Log::mpiRanksPerNode() * cells)) << std::defaultfloat 
+                 << " " << ((Log::mpiRanksPerNode() * cells) / stepTime_.lastEnergyReading()) << std::defaultfloat 
 #endif
                  << Log::endl;
   }

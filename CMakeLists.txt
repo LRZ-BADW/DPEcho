@@ -15,7 +15,6 @@ project( DPEcho
   LANGUAGES CXX
 )
 
-
 add_executable (dpecho
   echo.cpp Logger.cpp Grid.cpp Domain.cpp Problem.cpp Physics.cpp Metric.cpp Solver.cpp Output.cpp Device.cpp Parameters.cpp
   echo.hpp Logger.hpp Grid.hpp Domain.hpp Problem.hpp Physics.hpp Metric.hpp Solver.hpp Output.hpp Device.hpp Parameters.hpp
@@ -67,15 +66,25 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   list(APPEND TARGET_SYCL_BACKENDS "spir64")
   target_link_libraries(dpecho PUBLIC
     $<$<AND:$<CXX_COMPILER_ID:IntelLLVM>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,2024.1>>:-ftarget-register-alloc-mode=pvc:large>)
-
 endif()
 
 string(REPLACE ";" "," TARGET_SYCL_BACKENDS "${TARGET_SYCL_BACKENDS}")
-target_compile_options(dpecho PUBLIC -fsycl -fsycl-targets=${TARGET_SYCL_BACKENDS})
-target_link_libraries (dpecho PUBLIC -fsycl -fsycl-targets=${TARGET_SYCL_BACKENDS})
 
-find_package(VTune)
+# Support for acpp
+if(CMAKE_CXX_COMPILER MATCHES "acpp")
+  find_package(AdaptiveCpp CONFIG)
+  if(AdaptiveCpp_FOUND)
+    message(STATUS "Setting acpp as compiler.")
+  else()
+    message(ERROR  "acpp compiler requested, but AdaptiveCpp not found. Loaded it?")
+  endif(AdaptiveCpp_FOUND)
+else()
+  target_compile_options(dpecho PUBLIC -fsycl -fsycl-targets=${TARGET_SYCL_BACKENDS})
+  target_link_libraries (dpecho PUBLIC -fsycl -fsycl-targets=${TARGET_SYCL_BACKENDS})
+endif()
+
 #- VTune support, transparent to the user.
+find_package(VTune)
 if (VTune_FOUND)
  target_include_directories(dpecho PRIVATE ${VTune_INCLUDE_DIRS})
   target_link_libraries(dpecho PUBLIC ${VTune_LIBRARIES})
