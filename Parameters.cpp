@@ -22,16 +22,10 @@ Parameters::Parameters(std::string &filename) {
     std::string delimiter = " ";
     while (std::getline(fileIn, line)) {
         if (line.rfind("//", 0) == 0) {
-#ifndef NDEBUG
-          Log::cout(18)<<TAG<< "COMMENT: " << line << Log::endl;
-#endif
         } else {
           std::string key     = line.substr(0, line.find(delimiter));
           std::string content = line.erase (0, line.find(delimiter) + delimiter.length());
           parameters[key] = content;
-#ifndef NDEBUG
-          Log::cout(18) << "\tCONTENT: " << "KEY: " << key << " VALUE: " << content << Log::endl;
-#endif
         }
     }
     fileIn.close();

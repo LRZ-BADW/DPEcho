@@ -14,6 +14,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <math.h>
 
 #define TAG Log::getTag(__PRETTY_FUNCTION__)
 #define KTAG __FILE__ // Usable inside DPC++ kernels. For lack of a better one
