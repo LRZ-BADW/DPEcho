@@ -40,6 +40,9 @@ namespace TB {
       double energyLast_ = 0.0;
 #ifdef TB_ENERGY
       double energyAccu_ = 0.0;
+      // For accounting for fractional energy readings
+      double energyT0_ = 0.0, energyT1_ = 0.0, energyFrac_ = 1.0, energyLeftover_ = 0.0;
+      bool   stepFlag_ = false;
 #endif
       std::vector<double> laps;
 #ifndef MPICODE
@@ -64,22 +67,30 @@ namespace TB {
           powerCollector("./deltaEnergy.sh", boost::process::std_out > powerScriptInput),
           updateThread([&]() { this->powerDrawLoop(); }),
           isMainRunning(true)
-      {};
+      { };
 
       ~Timer() {
         powerCollector.terminate();
         isMainRunning = false;
         updateThread.join();
       }
+
       void powerDrawLoop() {
+        double readPower = getPowerDraw();
         while (isMainRunning && powerCollector.running()) {
-          this->energyAccu_+= getPowerDraw();
+          this->energyAccu_   += readPower *     energyFrac_ ;
+          this->energyLeftover_= readPower *(1.0-energyFrac_);
         }
       }
 
       inline double getPowerDraw() {
         std::string line;
         double res = -1.0;
+        // TODO put this somewhere more sensible
+#ifdef MPICODE
+        int initialized=0; while(!initialized){ MPI_Initialized(&initialized);}
+#endif
+        energyT0_ = this->get();
         while (powerScriptInput && std::getline(powerScriptInput, line) && !line.empty()) {
           try {
             res = std::stod(line);
@@ -88,12 +99,21 @@ namespace TB {
           } catch (std::out_of_range e) {
           }
         };
+        energyT1_ = this->get();
+        stepFlag_= true;  std::cout<<"getPowerDraw "<<"stepFlag made "<<stepFlag_<<std::endl;
         return res;
       }
 #else
     public:
 #endif
-      inline void   init(){ sum= 0.0; on(); }
+      inline void   init(){
+        sum= 0.0; on();
+#ifdef TB_ENERGY
+      // Reset all energy accumulation variables
+//      energyAccu_ = energyT0_ = energyT1_ = energyFrac_ = energyLeftover_ = 0.0; 
+//      stepFlag_ = false; std::cout<<"init() stepFlag made "<< stepFlag_<<std::endl;
+#endif
+      }
       inline void   on  (){ t0 = get(); }
       // WARNING: tot() and lap() will print, but only init() and on() will reset.
       inline double tot (){ return sum; }
@@ -101,8 +121,15 @@ namespace TB {
         double tt=get(), tr=tt-t0; sum+=tr; if(keep){laps.push_back(tr);};
 #ifdef TB_ENERGY
         if (energy){ //&& !myRank) {
+          stepFlag_= false;   // Until getPowerDraw() sets it again
+          std::cout<<"lap stepFlag made "<< stepFlag_<<std::endl;
+          energyFrac_ = abs( (tt - energyT0_)/(energyT1_ - energyT0_) );
+          energyFrac_ = std::min( energyFrac_ , 1.0 );
+          while(!!stepFlag_ == 0){ }; // Wait for a new power read, which will be fracional
+          energyFrac_ = 1.0;
           energyLast_ = energyAccu_;
-          this->energyAccu_ = 0.0;
+          this->energyAccu_ = energyLeftover_;
+          energyLeftover_ = 0.0;
         }
 #endif
         return tr;
