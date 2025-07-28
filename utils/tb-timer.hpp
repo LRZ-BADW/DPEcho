@@ -36,13 +36,16 @@ namespace TB {
 
   class Timer{
     private:
-      double t0, sum;
+      double t0, sum, tt;
       double energyLast_ = 0.0;
 #ifdef TB_ENERGY
       double energyAccu_ = 0.0;
       // For accounting for fractional energy readings
       double energyT0_ = 0.0, energyT1_ = 0.0, energyFrac_ = 1.0, energyLeftover_ = 0.0;
-      bool   stepFlag_ = false;
+      size_t   stepFlag_ = 0;
+#ifdef MPICODE
+      int initialized = 0;
+#endif
 #endif
       std::vector<double> laps;
 #ifndef MPICODE
@@ -76,21 +79,29 @@ namespace TB {
       }
 
       void powerDrawLoop() {
-        double readPower = getPowerDraw();
+#ifdef MPICODE
+        while(!initialized){ MPI_Initialized(&initialized);}
+#endif
         while (isMainRunning && powerCollector.running()) {
+          energyT0_ = this->get();
+          double readPower = getPowerDraw();
+          energyT1_ = this->get();
+          energyFrac_ =(tt - energyT0_)/(energyT1_ - energyT0_);
+          if( (stepFlag_) && (tt >= energyT0_) ){
+            std::cout<<"T0, Dtt, DT1, EF: "<<energyT0_<<", "<<tt-energyT0_<<", "<<energyT1_-energyT0_<<","<<energyFrac_<< std::endl;
+          }else{
+            energyFrac_ = 1.0;
+          }
           this->energyAccu_   += readPower *     energyFrac_ ;
           this->energyLeftover_= readPower *(1.0-energyFrac_);
+          energyFrac_= 1.0;
+          stepFlag_  = 1;
         }
       }
 
       inline double getPowerDraw() {
         std::string line;
         double res = -1.0;
-        // TODO put this somewhere more sensible
-#ifdef MPICODE
-        int initialized=0; while(!initialized){ MPI_Initialized(&initialized);}
-#endif
-        energyT0_ = this->get();
         while (powerScriptInput && std::getline(powerScriptInput, line) && !line.empty()) {
           try {
             res = std::stod(line);
@@ -99,8 +110,6 @@ namespace TB {
           } catch (std::out_of_range e) {
           }
         };
-        energyT1_ = this->get();
-        stepFlag_= true;  std::cout<<"getPowerDraw "<<"stepFlag made "<<stepFlag_<<std::endl;
         return res;
       }
 #else
@@ -108,28 +117,26 @@ namespace TB {
 #endif
       inline void   init(){
         sum= 0.0; on();
-#ifdef TB_ENERGY
-      // Reset all energy accumulation variables
-//      energyAccu_ = energyT0_ = energyT1_ = energyFrac_ = energyLeftover_ = 0.0; 
-//      stepFlag_ = false; std::cout<<"init() stepFlag made "<< stepFlag_<<std::endl;
+#ifdef TB_ENERGY        // Reset all energy accumulation variables
+        energyAccu_ = energyT0_ = energyT1_ = energyLeftover_ = 0.0;
+        energyFrac_ = 1.0; stepFlag_ = 0; // std::cout<<"init() stepFlag made "<< stepFlag_<<std::endl;
 #endif
       }
       inline void   on  (){ t0 = get(); }
       // WARNING: tot() and lap() will print, but only init() and on() will reset.
       inline double tot (){ return sum; }
       inline double lap (bool keep=true, bool energy=false, int myRank=0){
-        double tt=get(), tr=tt-t0; sum+=tr; if(keep){laps.push_back(tr);};
+        tt = get();
+        double tr=tt-t0; sum+=tr; if(keep){laps.push_back(tr);};
 #ifdef TB_ENERGY
         if (energy){ //&& !myRank) {
-          stepFlag_= false;   // Until getPowerDraw() sets it again
-          std::cout<<"lap stepFlag made "<< stepFlag_<<std::endl;
-          energyFrac_ = abs( (tt - energyT0_)/(energyT1_ - energyT0_) );
-          energyFrac_ = std::min( energyFrac_ , 1.0 );
-          while(!!stepFlag_ == 0){ }; // Wait for a new power read, which will be fracional
-          energyFrac_ = 1.0;
-          energyLast_ = energyAccu_;
-          this->energyAccu_ = energyLeftover_;
-          energyLeftover_ = 0.0;
+          stepFlag_= 0;   // Until getPowerDraw() sets it again
+//          size_t iii; while(!stepFlag_){ iii++; };
+          while(!stepFlag_){ std::cout<<""; };// std::cout<<std::endl;
+//          while(!stepFlag_){std::cout<<stepFlag_; }; std::cout<<std::endl; // Wait for a new power read, which will be fracional
+          this->energyLast_ = this->energyAccu_;
+          this->energyAccu_ = this->energyLeftover_;
+          this->energyLeftover_ = 0.0;
         }
 #endif
         return tr;
