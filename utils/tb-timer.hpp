@@ -40,9 +40,9 @@ namespace TB {
       double energyLast_ = 0.0;
 #ifdef TB_ENERGY
       double energyAccu_ = 0.0;
-      // For accounting for fractional energy readings
+      size_t stepFlag_ = 1; // Mark when power read is astride over two laps
+      // Account for fractional energy readings across such cases
       double energyT0_ = 0.0, energyT1_ = 0.0, energyFrac_ = 1.0, energyLeftover_ = 0.0;
-      size_t   stepFlag_ = 0;
 #ifdef MPICODE
       int initialized = 0;
 #endif
@@ -83,19 +83,19 @@ namespace TB {
         while(!initialized){ MPI_Initialized(&initialized);}
 #endif
         while (isMainRunning && powerCollector.running()) {
-          energyT0_ = this->get();
+          energyFrac_ = 1.0;
+          if(initialized) energyT0_ = this->get();
           double readPower = getPowerDraw();
-          energyT1_ = this->get();
-          energyFrac_ =(tt - energyT0_)/(energyT1_ - energyT0_);
-          if( (stepFlag_) && (tt >= energyT0_) ){
+          if( (!stepFlag_) && (tt >= energyT0_) ){
+            if(initialized) energyT1_   = this->get();
+            energyFrac_ = ( tt-energyT0_ )/( energyT1_-energyT0_ );
+            // TODO Debug print, remove
             std::cout<<"T0, Dtt, DT1, EF: "<<energyT0_<<", "<<tt-energyT0_<<", "<<energyT1_-energyT0_<<","<<energyFrac_<< std::endl;
-          }else{
-            energyFrac_ = 1.0;
+            stepFlag_  = 1;
           }
           this->energyAccu_   += readPower *     energyFrac_ ;
           this->energyLeftover_= readPower *(1.0-energyFrac_);
           energyFrac_= 1.0;
-          stepFlag_  = 1;
         }
       }
 
@@ -118,8 +118,9 @@ namespace TB {
       inline void   init(){
         sum= 0.0; on();
 #ifdef TB_ENERGY        // Reset all energy accumulation variables
-        energyAccu_ = energyT0_ = energyT1_ = energyLeftover_ = 0.0;
-        energyFrac_ = 1.0; stepFlag_ = 0; // std::cout<<"init() stepFlag made "<< stepFlag_<<std::endl;
+        energyAccu_ = energyT0_ = energyT1_ = 0.0;
+        energyFrac_ = 1.0; stepFlag_ = 0;
+        energyLeftover_ = 0.0; // An init must zero also this... but is the algorithm correct like this?
 #endif
       }
       inline void   on  (){ t0 = get(); }
@@ -131,9 +132,11 @@ namespace TB {
 #ifdef TB_ENERGY
         if (energy){ //&& !myRank) {
           stepFlag_= 0;   // Until getPowerDraw() sets it again
-//          size_t iii; while(!stepFlag_){ iii++; };
-          while(!stepFlag_){ std::cout<<""; };// std::cout<<std::endl;
-//          while(!stepFlag_){std::cout<<stepFlag_; }; std::cout<<std::endl; // Wait for a new power read, which will be fracional
+          // Wait for a power read. You alredy saved the time.
+          //  TODO Init after each step seems more correct,
+          //  not sure what happens to the extra time otherwise.
+          while(!stepFlag_){ std::cout<<""; };  // TODO W/O cout ... it loops forver. _shrug_ 
+          std::cout<<std::endl; // DEBUG PRINT
           this->energyLast_ = this->energyAccu_;
           this->energyAccu_ = this->energyLeftover_;
           this->energyLeftover_ = 0.0;
