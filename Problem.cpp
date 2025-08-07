@@ -26,7 +26,6 @@ Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, fie
   tMax_   = config.getOr<field>("tMax", 1.0); dt_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8/3.0; // Divide by 3 as it's 3D
   qq = qx;
   stepTime_.init();
-
   nxNH_ = D_->cartDims(0) * grid_->n[0];
   nyNH_ = D_->cartDims(1) * grid_->n[1];
   nzNH_ = D_->cartDims(2) * grid_->n[2];
@@ -47,8 +46,8 @@ void Problem::dtUpdate(field aMax){
   dt_ = std::min(cfl_/aMax, tMax_           -t_ + 1.e-6*tMax_          );
   t_ += dt_;
   //-- ACHTUNG!! Here and only here we are resetting the step timer!
-  double wallT_ = stepTime_.lap(false, true, BOVRank_); stepTime_.init();
-  
+  double wallT_ = stepTime_.lap(false, true, BOVRank_); //stepTime_.init();
+
   // Print on the main out for advancement
   Log::cout(0)<<TAG<<" Step # "<<iStep_<<": t "<<t_<<" i.e. "<<(t_/tMax_ * 100.0)<<"% dt "<<dt_<<" walltime/s "<<wallT_<<Log::endl;
   // Print perf values on the err

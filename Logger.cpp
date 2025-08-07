@@ -31,7 +31,7 @@ namespace std::filesystem {
 std::ofstream Log::logFile;
 int Log::coutVerbosity;
 int Log::clogVerbosity;
-TB::Timer Log::runtimeTracker;
+//TB::Timer Log::runtimeTracker;
 EndMarker const Log::endl;
 FlushMarker const Log::flush;
 
@@ -56,11 +56,11 @@ void Log::init(std::string logfileName, int coutVerb, int clogVerb) {
   clogVerbosity = clogVerb;
   Log::Assert(logFile.good(), "Log file "s + logfileName + " failed to open."s);
   logo();
-  runtimeTracker.init();
+//  runtimeTracker.init();
 }
 
 void Log::finalize() {
-  Log::cout() << TAG << "Total runtime [s]: "<< runtimeTracker.lap() << Log::endl;
+//  Log::cout() << TAG << "Total runtime [s]: "<< runtimeTracker.lap() << Log::endl;
 #ifdef MPICODE
   MPI_Finalize();
 #endif

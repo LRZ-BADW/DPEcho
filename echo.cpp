@@ -95,6 +95,7 @@ int main(int argc, char** argv ) {
   //-- Problem
   field dtLoc; // local copy of time, for ease of capture
   Problem problem(qDev, param, &grid, DD, out);
+
   problem.init(v, u);  // Inits v and u in DEVICE based on param scenario, calls BCex, prints ICs.
 
   //-- SYCL ranges and related accessories
