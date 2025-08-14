@@ -46,7 +46,7 @@ void Problem::dtUpdate(field aMax){
   dt_ = std::min(cfl_/aMax, tMax_           -t_ + 1.e-6*tMax_          );
   t_ += dt_;
   //-- ACHTUNG!! Here and only here we are resetting the step timer!
-  double wallT_ = stepTime_.lap(false, true, BOVRank_); //stepTime_.init();
+  double wallT_ = stepTime_.lap(false, true, BOVRank_); stepTime_.lapReset();
 
   // Print on the main out for advancement
   Log::cout(0)<<TAG<<" Step # "<<iStep_<<": t "<<t_<<" i.e. "<<(t_/tMax_ * 100.0)<<"% dt "<<dt_<<" walltime/s "<<wallT_<<Log::endl;

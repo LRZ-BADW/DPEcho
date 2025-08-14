@@ -39,6 +39,18 @@ namespace TB {
       double t0, sum, tt;
       double energyLast_ = 0.0;
       int globRank = 0, globSize = 1;
+      std::vector<double> laps;
+#ifdef MPICODE
+      int initialized = 0;
+      inline double get() {	return MPI_Wtime(); }
+#else
+      struct timeval TT;
+      inline double get() {
+        gettimeofday(&TT, (struct timezone *) NULL);
+        return (TT.tv_sec)+(TT.tv_usec)*static_cast<double>(0.000001);
+      }
+#endif
+
 #ifdef TB_ENERGY
       int nodeRank = 0, nodeSize = 1;
       int enerInitd = 0;
@@ -46,21 +58,7 @@ namespace TB {
       volatile size_t stepFlag_ = 1; // Mark when power read is astride over two laps
       // Account for fractional energy readings across such cases
       double energyT0_ = 0.0, energyT1_ = 0.0, energyFrac_ = 1.0, energyLeftover_ = 0.0;
-#ifdef MPICODE
-      int initialized = 0;
-#endif
-#endif
-      std::vector<double> laps;
-#ifndef MPICODE
-      struct timeval TT;
-      inline double get() {
-        gettimeofday(&TT, (struct timezone *) NULL);
-        return (TT.tv_sec)+(TT.tv_usec)*static_cast<double>(0.000001);
-      }
-#else
-      inline double get() {	return MPI_Wtime(); }
-#endif
-#ifdef TB_ENERGY
+
     private:
       boost::process::ipstream powerScriptInput;
       boost::process::child    powerCollector;
@@ -71,10 +69,12 @@ namespace TB {
       Timer()
         : powerScriptInput(),
           powerCollector("./deltaEnergy.sh", boost::process::std_out > powerScriptInput),
-//          updateThread([&]() { this->powerDrawLoop(); }),
           isMainRunning(true)
-      { enerInit(); };
-//      { std::cout<<"constructor"<<std::endl;};
+      { while(!initialized){ MPI_Initialized(&initialized); }
+      	MPI_Comm_rank(MPI_COMM_WORLD, &globRank);
+      	MPI_Comm_size(MPI_COMM_WORLD, &globSize);
+        enerInit();
+      };
 
       ~Timer() {
         powerCollector.terminate();
@@ -85,9 +85,6 @@ namespace TB {
       void enerInit(){
        enerInitd=1;
 #ifdef MPICODE
-        while(!initialized){ MPI_Initialized(&initialized); }// std::cout<<(initialized?"i":"n");} std::cout<<std::endl;
-      	MPI_Comm_rank(MPI_COMM_WORLD, &globRank);
-      	MPI_Comm_size(MPI_COMM_WORLD, &globSize);
         MPI_Comm local_comm;
         MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &local_comm);
         MPI_Comm_rank(local_comm, &nodeRank);
@@ -104,13 +101,10 @@ namespace TB {
           if( (!stepFlag_) && (tt >= energyT0_) ){
             energyT1_   = this->get();
             energyFrac_ = ( tt-energyT0_ )/( energyT1_-energyT0_ );
-            // TODO Debug print, remove
-            std::cout <<globRank<<" "<<globSize<<" " <<nodeRank<<" "<<nodeSize<<"T0, Dtt, DT1, EF: "<<energyT0_<<", "<<tt-energyT0_<<", "<<energyT1_-energyT0_<<","<<energyFrac_<< std::endl;
             stepFlag_  = 1;
           }
           this->energyAccu_   += readPower *     energyFrac_ ;
           this->energyLeftover_= readPower *(1.0-energyFrac_);
-          std::cout <<"Powers at this lap: "<< readPower<<" "<<this->energyAccu_<<", "<<this->energyLeftover_<< std::endl;
           energyFrac_= 1.0;
         }
       }
@@ -142,7 +136,6 @@ namespace TB {
       inline void   init(){
         sum= 0.0; on();
 #ifdef TB_ENERGY        // Reset all energy accumulation variables
-//        if( !enerInitd) enerInit();
         energyAccu_ = energyT0_ = energyT1_ = 0.0;
         energyFrac_ = 1.0; stepFlag_ = 0;
         energyLeftover_ = 0.0; // An init must zero also this... but is the algorithm correct like this?
@@ -151,6 +144,7 @@ namespace TB {
       inline void   on  (){ t0 = get(); }
       // WARNING: tot() and lap() will print, but only init() and on() will reset.
       inline double tot (){ return sum; }
+      inline void   lapReset (){t0=get(); sum=0;};
       inline double lap (bool keep=true, bool energy=false, int myRank=0){
         tt = get();
         double tr=tt-t0; sum+=tr; if(keep){laps.push_back(tr);};
@@ -158,10 +152,7 @@ namespace TB {
         if (energy && !nodeRank) {
           stepFlag_= 0;   // Until getPowerDraw() sets it again
           // Wait for a power read. You alredy saved the time.
-          //  TODO Init after each step seems more correct,
-          //  not sure what happens to the extra time otherwise.
-          while(1) { if (stepFlag_) break; };  // TODO W/O cout ... it loops forver. _shrug_ 
-//          std::cout<<std::endl; // DEBUG PRINT
+          while(1) { if (stepFlag_) break; };
           this->energyLast_ = this->energyAccu_;
           this->energyAccu_ = this->energyLeftover_;
           this->energyLeftover_ = 0.0;
@@ -171,8 +162,7 @@ namespace TB {
       }
       inline double lastEnergyReading() { return energyLast_; }
 
-      // Output timing in a centralized fashion.
-      std::string getTimings() {
+      std::string getTimings(){ // Output timing in a centralized fashion.
       	std::stringstream buf;
 #ifdef MPICODE
       	std::vector<double> allResults;
