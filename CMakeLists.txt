@@ -36,14 +36,14 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${MYBUILDTYPE})
 # - support for Intel FPGAs
 
 include(CheckLanguage)
-check_language(CUDA)
-check_language(HIP)
+#check_language(CUDA)
+#check_language(HIP)
 
-set(TARGET_GPU_AMD "gfx90a" CACHE STRING "Set the type of AMD GPU that will be targeted.")
-set_property(CACHE TARGET_GPU_AMD PROPERTY STRINGS gfx900 gfx906 gfx908 gfx90a gfx942)
-
-set(TARGET_GPU_NVIDIA "sm_80" CACHE STRING "Set the type of NVIDIA GPU that will be targeted.")
-set_property(CACHE TARGET_GPU_NVIDIA PROPERTY STRINGS sm_60 sm_70 sm_75 sm_80 sm_89 sm_90 sm_95)
+#set(TARGET_GPU_AMD "gfx90a" CACHE STRING "Set the type of AMD GPU that will be targeted.")
+#set_property(CACHE TARGET_GPU_AMD PROPERTY STRINGS gfx900 gfx906 gfx908 gfx90a gfx942)
+#
+#set(TARGET_GPU_NVIDIA "sm_80" CACHE STRING "Set the type of NVIDIA GPU that will be targeted.")
+#set_property(CACHE TARGET_GPU_NVIDIA PROPERTY STRINGS sm_60 sm_70 sm_75 sm_80 sm_89 sm_90 sm_95)
 
 set(TARGET_SYCL_BACKENDS "")
 
@@ -57,8 +57,8 @@ endif()
 if (CMAKE_CUDA_COMPILER)
   message(STATUS "Adding NVPTX64 backend.")
   list(APPEND TARGET_SYCL_BACKENDS "nvptx64-nvidia-cuda")
-  target_compile_options(dpecho PUBLIC -Xsycl-target-backend=nvptx64-nvidia-cuda --cuda-gpu-arch=${TARGET_GPU_NVIDIA} -mllvm -nvptx-sched4reg=true)
-  target_link_libraries (dpecho PUBLIC -Xsycl-target-backend=nvptx64-nvidia-cuda --cuda-gpu-arch=${TARGET_GPU_NVIDIA} -mllvm -nvptx-sched4reg=true)
+#  target_compile_options(dpecho PUBLIC -Xsycl-target-backend=nvptx64-nvidia-cuda --cuda-gpu-arch=${TARGET_GPU_NVIDIA} -mllvm -nvptx-sched4reg=true)
+#  target_link_libraries (dpecho PUBLIC -Xsycl-target-backend=nvptx64-nvidia-cuda --cuda-gpu-arch=${TARGET_GPU_NVIDIA} -mllvm -nvptx-sched4reg=true)
 endif()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
@@ -75,6 +75,7 @@ if(CMAKE_CXX_COMPILER MATCHES "acpp")
   find_package(AdaptiveCpp CONFIG)
   if(AdaptiveCpp_FOUND)
     message(STATUS "Setting acpp as compiler.")
+  target_compile_options(dpecho PUBLIC -fopenmp)
   else()
     message(ERROR  "acpp compiler requested, but AdaptiveCpp not found. Loaded it?")
   endif(AdaptiveCpp_FOUND)
@@ -162,7 +163,6 @@ if(SINGLE_PRECISION)
 else()
   message(STATUS "Compilation with double precision floating point numbers enabled.")
 endif(SINGLE_PRECISION)
-
 
 find_package(Boost)
 option(ENERGY_METER "Provide ./deltaEnergy.sh with user-defined command in run folder to print used energy." OFF)

@@ -16,6 +16,7 @@
 
 #define NDIM 3
 
+#define SYCL_EXTERNAL
 
 //-- Field numbering
 #ifndef FLD_TOT
