@@ -1,0 +1,3 @@
+[submodule "p3em"]
+	path = p3em
+	url = git@gitlab.lrz.de:di52vum/p3em.git

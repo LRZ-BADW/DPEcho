@@ -164,16 +164,19 @@ else()
 endif(SINGLE_PRECISION)
 
 
-find_package(Boost)
-option(ENERGY_METER "Provide ./deltaEnergy.sh with user-defined command in run folder to print used energy." OFF)
-if(Boost_FOUND AND ENERGY_METER)
+#find_package(Boost)
+#option(ENERGY_METER "Provide ./deltaEnergy.sh with user-defined command in run folder to print used energy." OFF)
+option(ENERGY_METER "Provide ./p3em/p3em.sh with user-defined command in run folder to print used energy." OFF)
+if(ENERGY_METER)
   set(SUFFIX "${SUFFIX}_nrg")
   target_compile_definitions(dpecho PUBLIC TB_ENERGY)
-  target_include_directories(dpecho PUBLIC ${Boost_INCLUDE_DIRS})
-  target_link_libraries(dpecho PUBLIC Boost::boost -pthread)
-  message(STATUS "ENERGY_METER is ON: User *MUST* ensure deltaEnergy.sh script is in working order.")
-elseif(ENERGY_METER)
-  message(WARNING "ENERGY_METER is requested but relies on Boost Process to be available. Disabling Energy collection.")
+#  target_include_directories(dpecho PUBLIC ${Boost_INCLUDE_DIRS})
+#  target_link_libraries(dpecho PUBLIC Boost::boost -pthread)
+  target_link_libraries(dpecho PUBLIC -pthread)
+# TODO fix this
+#  target_include_directories(dpecho PRIVATE "../p3em/C++")
+#  add_executable(dpecho "p3em.hpp")
+  message(STATUS "ENERGY_METER is ON: User *MUST* ensure p3em/p3em.sh script is in working order.")
 endif()
 
 # -- Code

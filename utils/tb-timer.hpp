@@ -22,7 +22,7 @@
 #endif
 
 #ifdef TB_ENERGY
-#include <boost/process.hpp>
+#include "../p3em/C++/p3em.hpp"
 #endif
 
 #include <iomanip>
@@ -38,60 +38,26 @@ namespace TB {
     private:
       double t0, sum;
       double energyLast_ = 0.0;
-#ifdef TB_ENERGY
-      double energyAccu_ = 0.0;
-#endif
       std::vector<double> laps;
-#ifndef MPICODE
+#ifdef TB_ENERGY
+#warning "tb-timer is using Energy"
+      p3em myem;
+      inline double get(){ return myem.getLatestValue(); }
+#elif !defined(MPICODE)
+#warning "tb-timer is using gettimeofday"
       struct timeval TT;
       inline double get() {
         gettimeofday(&TT, (struct timezone *) NULL);
         return (TT.tv_sec)+(TT.tv_usec)*static_cast<double>(0.000001);
       }
 #else
+#warning "tb-timer is using MPI time"
       inline double get() {	return MPI_Wtime(); }
 #endif
 
+    public:
 #ifdef TB_ENERGY
-      boost::process::ipstream powerScriptInput;
-      boost::process::child    powerCollector;
-      std::thread updateThread;
-      bool isMainRunning;
-
-    public:
-      Timer()
-        : powerScriptInput(),
-          powerCollector("./deltaEnergy.sh", boost::process::std_out > powerScriptInput),
-          updateThread([&]() { this->powerDrawLoop(); }),
-          isMainRunning(true)
-      {};
-
-      ~Timer() {
-        powerCollector.terminate();
-        isMainRunning = false;
-        updateThread.join();
-      }
-      void powerDrawLoop() {
-        while (isMainRunning && powerCollector.running()) {
-          this->energyAccu_+= getPowerDraw();
-        }
-      }
-
-      inline double getPowerDraw() {
-        std::string line;
-        double res = -1.0;
-        while (powerScriptInput && std::getline(powerScriptInput, line) && !line.empty()) {
-          try {
-            res = std::stod(line);
-            break;
-          } catch (std::invalid_argument e) {
-          } catch (std::out_of_range e) {
-          }
-        };
-        return res;
-      }
-#else
-    public:
+      Timer(): myem("../p3em/p3em.sh"){};
 #endif
       inline void   init(){ sum= 0.0; on(); }
       inline void   on  (){ t0 = get(); }
@@ -99,12 +65,6 @@ namespace TB {
       inline double tot (){ return sum; }
       inline double lap (bool keep=true, bool energy=false, int myRank=0){
         double tt=get(), tr=tt-t0; sum+=tr; if(keep){laps.push_back(tr);};
-#ifdef TB_ENERGY
-        if (energy){ //&& !myRank) {
-          energyLast_ = energyAccu_;
-          this->energyAccu_ = 0.0;
-        }
-#endif
         return tr;
       }
       inline double lastEnergyReading() { return energyLast_; }
