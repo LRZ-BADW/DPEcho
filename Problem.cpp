@@ -128,9 +128,7 @@ void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
 
 void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
 #if defined(FILE_IO_VISIT_BOV)
-#ifdef MPICODE
   waitOut();
-#endif
   // Device code: update *out with provided real
   if(dumpHalos){
     for(int iVar=0; iVar<FLD_TOT; ++iVar) qq.memcpy(out[iVar], v[iVar], gr.nht*sizeof(real)); // Direct memcpy

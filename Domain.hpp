@@ -31,12 +31,8 @@ class Domain {
     real locMin_[NDIM], locMax_[NDIM], locSize_[NDIM]; // This rank info, physical
     real *bufL, *bufR;                                 // Buffers for boundary XCHG
     int neighRankPrev_[NDIM], neighRankNext_[NDIM];  MPI_Comm cartComm_;
-#if (MPICODE != SR_REPLACE)
     real *sendBufL, *sendBufR;                // Additional buffers, as sendRecv needs two
-#endif
-#if (MPICODE == ISEND) || (MPICODE == START)
     MPI_Request reqSendL[NDIM], reqSendR[NDIM], reqRecvL[NDIM], reqRecvR[NDIM];
-#endif
 
   public:
     Domain(sycl::queue, size_t[NDIM], Parameters &);

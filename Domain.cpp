@@ -17,14 +17,7 @@ using namespace sycl;
 
 Domain::~Domain( ){
   free(bufL, qq); free(bufR, qq);
-#if MPICODE != SR_REPLACE
   free(sendBufL, qq); free(sendBufR, qq);
-#endif
-#if MPICODE == START
-// These should be here, but give errors. Check again with future MPI releases.
-//  MPI_Request_free(reqSendL);  MPI_Request_free(reqSendR);
-//  MPI_Request_free(reqRecvL);  MPI_Request_free(reqRecvR);
-#endif
   Log::cout(4) << TAG << "Domain removed and BCex buffers deallocated." << Log::endl;
 }
 
@@ -34,10 +27,8 @@ Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param) {
   int nprocs = Log::mpiSize(), myrank = Log::mpiRank(),  reorder = 0;
   size_t bufMax = std::max({bufSizes[0], bufSizes[1], bufSizes[2]});
   qq = q; // Use the queue to allocate the buffers
-#if (MPICODE != SR_REPLACE)
   sendBufL= malloc_shared<real>(FLD_TOT*bufMax, qq); Log::Assert(sendBufL, "Cannot allocate recvBufL.");
   sendBufR= malloc_shared<real>(FLD_TOT*bufMax, qq); Log::Assert(sendBufR, "Cannot allocate recvBufR.");
-#endif
   bufL= malloc_shared<real>(FLD_TOT*bufMax, qq);     Log::Assert(bufL, "Cannot allocate bufL.");
   bufR= malloc_shared<real>(FLD_TOT*bufMax, qq);     Log::Assert(bufR, "Cannot allocate bufR.");
 
@@ -74,14 +65,12 @@ Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param) {
   }
   Log::clog() << TAG << "Domain created!" << Log::endl;  cartInfo();
 
-#if (MPICODE == START)
   for(unsigned short i=0; i<NDIM; ++i){
     MPI_Send_init(sendBufL,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankPrev_[i],10,cartComm_,&reqSendL[i]);
     MPI_Send_init(sendBufR,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankNext_[i],20,cartComm_,&reqSendR[i]);
     MPI_Recv_init(    bufL,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankNext_[i],10,cartComm_,&reqRecvL[i]);
     MPI_Recv_init(    bufR,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankPrev_[i],20,cartComm_,&reqRecvR[i]);
   }
-#endif
 
 }
 
@@ -119,7 +108,6 @@ void Domain::locInfo() {
 //  - It always assumes periodic, w or w/o MPI. At the end it will take care of other BCs.
 void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the usual local grid.
 
-  int myRank; MPI_Comm_rank(cartComm_, &myRank);
   MPI_Status  status;
   int i0 = (dType==BCEX_VU)?0:1; // Flux is Mx+1 so bcex needs shift
 
@@ -130,17 +118,9 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
   nd_range<3> ndr = getMatchingNdRange(rBuf, range<3>(4,4,4));
   Log::clog(8) << TAG << " Filling buffers ..." << Log::endl;
 
-  real *bL = this->bufL, *bR = this->bufR;
-#if MPICODE != SR_REPLACE
-  bL = this->sendBufL; bR = this->sendBufR;
-#endif
-#if   MPICODE == ISEND
-  MPI_Irecv(bufL,sBuf*FLD_TOT,MPI_REAL,neighRankNext_[myDir],10,cartComm_,&reqRecvL[myDir]);
-  MPI_Irecv(bufR,sBuf*FLD_TOT,MPI_REAL,neighRankPrev_[myDir],20,cartComm_,&reqRecvR[myDir]);
-#elif MPICODE == START
+  real *bL = this->sendBufL, *bR = this->sendBufR;
   MPI_Start(&reqRecvL[myDir]);
   MPI_Start(&reqRecvR[myDir]);
-#endif
   id<3> nOffRead = range<3>(nOff[0], nOff[1], nOff[2]); nOffRead[myDir] +=i0;
   range<3> const fullGrR(gr.nh[0], gr.nh[1], gr.nh[2]); 
   qq.parallel_for( ndr, [=](nd_item<3> it){
@@ -150,66 +130,38 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
     size_t iVL   = globLinId(id, fullGrR, nOffRead), iVR   = gr.nht -1 -iVL;
     for(int iVar=0; iVar<FLD_TOT; ++iVar){
       bL[iVar*sBuf+iBufL] = v[iVar][iVL];
-#if ( (MPICODE == ISEND) || (MPICODE == START) )
     }
   }).wait_and_throw();
-#if   MPICODE == ISEND
-  MPI_Isend(sendBufL,sBuf*FLD_TOT,MPI_REAL,neighRankPrev_[myDir],10,cartComm_,&reqSendL[myDir]);
-#elif MPICODE == START
   MPI_Start(&reqSendL[myDir]);
-#endif
   qq.parallel_for( rBuf, [=](item<3> it){
-    int iBufL = it.get_linear_id()        , iBufR = sBuf   -1 -iBufL; // The same, if we start from the end
+    int iBufL = it.get_linear_id()        , iBufR = sBuf   -1 -iBufL;
     int iVL   = globLinId(it, fullGrR, nOffRead), iVR   = gr.nht -1 -iVL;
     for(int iVar=0; iVar<FLD_TOT; ++iVar){
-#endif
       bR[iVar*sBuf+iBufR] = v[iVar][iVR];
     }
   }).wait_and_throw();
 
 //- Middle communication
-#if   MPICODE == ISEND
-  MPI_Isend(sendBufR,sBuf*FLD_TOT,MPI_REAL,neighRankNext_[myDir],20,cartComm_,&reqSendR[myDir]);
-  MPI_Wait (&reqRecvL[myDir],&status);
-#elif MPICODE == START
   MPI_Start(&reqSendR[myDir]);
   MPI_Wait (&reqRecvL[myDir],&status);
-#elif MPICODE == SENDRECV
- Log::clog(8) << TAG << "L MPI_Sendrrecv ... " << Log::endl;
-  MPI_Sendrecv(
-    sendBufL,sBuf*FLD_TOT,MPI_REAL,neighRankPrev_[myDir],10,
-        bufL,sBuf*FLD_TOT,MPI_REAL,neighRankNext_[myDir],10,
-    cartComm_,&status);
-  Log::clog(8) << TAG << "R MPI_Sendrrecv ... " << Log::endl;
-  MPI_Sendrecv(
-    sendBufR,sBuf*FLD_TOT,MPI_REAL,neighRankNext_[myDir],20,
-        bufR,sBuf*FLD_TOT,MPI_REAL,neighRankPrev_[myDir],20,
-    cartComm_,&status);
-#elif MPICODE == SR_REPLACE
-  Log::clog(8) << TAG << "L+R MPI_Sendrrecv_replace ... " << Log::endl;
-  MPI_Sendrecv_replace(bufL,sBuf*FLD_TOT,MPI_REAL,neighRankPrev_[myDir],myRank,neighRankNext_[myDir],MPI_ANY_TAG,cartComm_,&status);
-  MPI_Sendrecv_replace(bufR,sBuf*FLD_TOT,MPI_REAL,neighRankNext_[myDir],myRank,neighRankPrev_[myDir],MPI_ANY_TAG,cartComm_,&status);
-#endif
   Log::clog(8) << TAG << " Recopying from buffers..." << Log::endl;
   nOff[myDir] = 0; // To write, we start from 0
   id<3> nOffW = range<3>(nOff[0], nOff[1], nOff[2]);
-  qq.parallel_for(ndr,[=,bL=this->bufL,bR=this->bufR](nd_item<3> it){  // v -> WHindex
+  qq.parallel_for(ndr,[=,bL=this->bufL](nd_item<3> it){  // v -> WHindex
     id<3> id = it.get_global_id();
     if (isOutOfBounds(id, rBuf)) return;
     size_t iVL   = globLinId(id, fullGrR, nOffW), iVR   = gr.nht -1 -iVL  ;  // For the regular BCEX
     size_t iBufL = globLinId(id, rBuf, sycl::id<3>(0,0,0)), iBufR = sBuf   -1 -iBufL;  // The same, if we start from the end
     for(int iVar=0; iVar<FLD_TOT; ++iVar){
       v[iVar][iVR] = bL[iVar*sBuf+iBufR];  // ...besides the flipped assignments
-#if ( (MPICODE == ISEND) || (MPICODE == START) )
     }
   }); // NO SYCL wait here!
   MPI_Wait (&reqRecvR[myDir],&status);
-  qq.parallel_for(rBuf,[=,bL=this->bufL,bR=this->bufR](item<3> it){  // v -> WHindex
-    int iVL   = globLinId(it, fullGrR, nOffW), iVR   = gr.nht -1 -iVL  ;  // For the regular BCEX
-    int iBufL = it.get_linear_id(        ), iBufR = sBuf   -1 -iBufL;  // The same, if we start from the end
+  qq.parallel_for(rBuf,[=,bR=this->bufR](item<3> it){
+    int iVL   = globLinId(it, fullGrR, nOffW), iVR   = gr.nht -1 -iVL;
+    int iBufL = it.get_linear_id()        , iBufR = sBuf   -1 -iBufL;
     for(int iVar=0; iVar<FLD_TOT; ++iVar){
-#endif
-      v[iVar][iVL] = bR[iVar*sBuf+iBufL];  // ACHTUNG: Must reverse both L<-->R and the indexes in them!
+      v[iVar][iVL] = bR[iVar*sBuf+iBufL];
     }
   }).wait_and_throw();
   switch(bcType_[myDir]){ //-- PROCESSING BC TYPEs
@@ -263,10 +215,8 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
     default   : Log::cerr(2) << TAG << "Unknown BC TYPE " << bcType_[myDir] << " along direction " << myDir << ". Proceeding as periodic." << Log::endl;
   }// End switch
 
-#if ( (MPICODE == ISEND) || (MPICODE == START) )
   MPI_Wait(&reqSendL[myDir],&status);
   MPI_Wait(&reqSendR[myDir],&status);
-#endif
   Log::clog(8) << TAG << " BCex complete." << Log::endl;
   return;
 }

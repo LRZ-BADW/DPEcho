@@ -97,17 +97,11 @@ else()
 endif(VTune_FOUND)
 
 #-- MPI is mandatory
-set(MPI SENDRECV CACHE STRING "Select the MPI communication mode. SENDRECV is best tested.")
-set(MPI_VALS  SR_REPLACE SENDRECV ISEND START)
-set_property(CACHE MPI PROPERTY STRINGS ${MPI_VALS})
 find_package(MPI REQUIRED)
-string(TOLOWER ${MPI} MYMPI)
-set(SUFFIX "${SUFFIX}_${MYMPI}")
 target_link_libraries(dpecho PUBLIC ${MPI_CXX_LIBRARIES})
 target_include_directories(dpecho PRIVATE ${MPI_CXX_INCLUDE_DIRS})
-target_compile_definitions(dpecho PRIVATE MPICODE=${MPI})
 target_compile_options(dpecho PRIVATE ${MPI_CXX_COMPILE_OPTIONS})
-message(STATUS "Configuring Echo with MPI (mode: ${MPI})")
+message(STATUS "Configuring Echo with MPI (persistent communication)")
 
 set(WARNINGS REASONABLE CACHE STRING "Select the warning level.")
 set(WARNINGS_VALS MINIMAL REASONABLE PEDANTIC EXCESSIVE)
