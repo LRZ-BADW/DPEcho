@@ -85,8 +85,8 @@ namespace output {
       //-- BOV header: one per variable (master rank only)
       if (Log::isMaster()) {
         std::ostringstream bovName;
-        bovName << dir << "/" << std::setw(4) << std::setfill('0') << outNum_
-                << "_" << varLabel[iVar] << ".bov";
+        bovName << dir << "/" << varLabel[iVar] << "_"
+                << std::setw(4) << std::setfill('0') << outNum_ << ".bov";
         ofstream bov; bov.open(bovName.str(), ios_base::out);
         bov << "TIME: " << problem.t() << "\n";
         bov << "DATA_FILE: " << std::setw(4) << std::setfill('0') << outNum_
@@ -99,7 +99,7 @@ namespace output {
 #else
         bov << "DATA_FORMAT: DOUBLE\n";
 #endif
-        bov << "VARIABLE: " << varLabel[iVar] << "\n";
+        bov << "VARIABLE: v\n";
         bov << "DATA_ENDIAN: LITTLE\n";
         bov << "CENTERING: zonal\n";
         bov << "BRICK_ORIGIN: " << brickOrigin[2] << " " << brickOrigin[1] << " " << brickOrigin[0] << "\n";
