@@ -34,7 +34,7 @@ namespace filesystem {
 
 namespace output {
 
-  static const char* varLabel[FLD_TOT] = {"RH", "VX", "VY", "VZ", "PG", "BX", "BY", "BZ"};
+  const char* varLabel[FLD_TOT] = {"RH", "VX", "VY", "VZ", "PG", "BX", "BY", "BZ"};
 
   void writeArray(Problem &problem, Grid &gr, std::string dir, std::string name) {
     using namespace std::string_literals;
@@ -56,7 +56,7 @@ namespace output {
     stepDir << dir << "/" << std::setw(4) << std::setfill('0') << outNum_;
     filesystem::create_directory(stepDir.str());
 
-    int Ncell[3], Ntot = 1;
+    int Ncell[3];
     field brickSize  [3];
     field brickOrigin[3] = {problem.D_->boxMin (0), problem.D_->boxMin (1), problem.D_->boxMin (2)};
 
@@ -66,11 +66,16 @@ namespace output {
         brickOrigin[ii]*=(1.0*gr.nh[ii])/gr.n[ii];
       }
       else                   { Ncell[ii] = gr.n [ii]; }
-      Ntot*= Ncell[ii];
       brickSize  [ii] = Ncell[ii] * problem.D_->cartDims(ii) * gr.dx[ii];
     }
 
+#ifndef MPICODE
+    int Ntot = 1;
+    for(int ii = 0; ii < 3; ++ii) Ntot *= Ncell[ii];
+#endif
+
     for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
+#ifndef MPICODE
       //-- Data file: one contiguous write per variable
       std::ostringstream datName;
       datName << stepDir.str() << "/" << name << "_" << varLabel[iVar] << "_"
@@ -81,6 +86,7 @@ namespace output {
         fwrite(problem.out[iVar], sizeof(field), Ntot, fp);
       }
       fclose(fp);
+#endif
 
       //-- BOV header: one per variable (master rank only)
       if (Log::isMaster()) {

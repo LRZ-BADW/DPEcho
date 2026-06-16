@@ -48,6 +48,7 @@ class Problem {
     void dump( field_array &fld, Grid &gr, std::string dir="out", std::string name="task");
     void dump( field_array &fld, std::string dir="out", std::string name="task"){ dump(fld,*(this->grid_),dir,name ); };
     std::string getTimings() { return stepTime_.getTimings(); }
+    void waitOut();
 
     // Generic problem initializer -- calls specific inits based on config
     void init(field_array &v, field_array &u);
@@ -67,6 +68,11 @@ class Problem {
     unsigned long iOut_, iStep_, nStep_;
     Grid   *grid_;
     Domain *D_;
+#ifdef MPICODE
+    MPI_File out_fh[FLD_TOT];
+    MPI_Request out_req[FLD_TOT];
+    bool out_pending = false;
+#endif
 };
 
 #endif

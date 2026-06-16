@@ -213,6 +213,8 @@ int main(int argc, char** argv ) {
 
   Log::togglePcontrol(0);
 
+  problem.waitOut();
+
   for (int i=0; i < FLD_TOT; ++i){ free(out[i], qDev); }
   for (int i=0; i < FLD_TOT; ++i){ free(  v[i], qDev); }
   for (int i=0; i < FLD_TOT; ++i){ free(  u[i], qDev); }

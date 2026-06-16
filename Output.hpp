@@ -22,6 +22,7 @@
 class Problem;
 
 namespace output {
+  extern const char* varLabel[FLD_TOT];
   void writeArray(Problem &problem, Grid &gr, std::string dir="out", std::string name="task");
 }
 

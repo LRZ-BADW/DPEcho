@@ -65,8 +65,21 @@ void Problem::dtUpdate(field aMax){
   iStep_++;
 }
 
-void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){ // Asynchronous output
+void Problem::waitOut() {
+#ifdef MPICODE
+  if (out_pending) {
+    MPI_Waitall(FLD_TOT, out_req, MPI_STATUSES_IGNORE);
+    for (int i = 0; i < FLD_TOT; ++i) MPI_File_close(&out_fh[i]);
+    out_pending = false;
+  }
+#endif
+}
+
+void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){
 #if defined(FILE_IO_VISIT_BOV)
+#ifdef MPICODE
+  waitOut();
+#endif
   // Device code: update *out with provided field
   if(dumpHalos){
     for(int iVar=0; iVar<FLD_TOT; ++iVar) qq.memcpy(out[iVar], v[iVar], gr.nht*sizeof(field)); // Direct memcpy
@@ -81,8 +94,33 @@ void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){
     });
   }
   qq.wait_and_throw();
-  // Host code: simple but parallel BOV output
+  // Host code: .bov headers (and serial .dat fallback without MPI)
   output::writeArray(*this, gr, dir, name);
+  // MPI: start async .dat writes
+#ifdef MPICODE
+  {
+    int Ncell[3], Ntot = 1;
+    for(int ii = 0; ii < 3; ++ii){
+      if(dumpHalos) Ncell[ii] = gr.nh[ii];
+      else          Ncell[ii] = gr.n [ii];
+      Ntot *= Ncell[ii];
+    }
+    for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
+      std::ostringstream datName;
+      datName << dir << "/" << std::setw(4) << std::setfill('0') << iOut_
+              << "/" << name << "_" << output::varLabel[iVar] << "_"
+              << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
+      MPI_File_open(MPI_COMM_SELF, datName.str().c_str(),
+                    MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &out_fh[iVar]);
+#ifdef SINGLE_PRECISION
+      MPI_File_iwrite(out_fh[iVar], out[iVar], Ntot, MPI_FLOAT, &out_req[iVar]);
+#else
+      MPI_File_iwrite(out_fh[iVar], out[iVar], Ntot, MPI_DOUBLE, &out_req[iVar]);
+#endif
+    }
+    out_pending = true;
+  }
+#endif
 #elif defined(FILE_IO_DISABLED)
   // Do nothing.
 #else
