@@ -30,7 +30,8 @@ Parameters::Parameters(std::string &filename) {
     }
     fileIn.close();
   } else {
-    Log::Assert(false, "Parameters File: "s + filename + " is not valid. Aborting."s);
+    std::cout<<"Parameters File: "s + filename + " is not valid. Aborting."<<std::endl;
+    std::abort();
   }
 }
 

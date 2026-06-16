@@ -34,6 +34,8 @@ namespace filesystem {
 
 namespace output {
 
+  static const char* varLabel[FLD_TOT] = {"RH", "VX", "VY", "VZ", "PG", "BX", "BY", "BZ"};
+
   void writeArray(Problem &problem, Grid &gr, std::string dir, std::string name) {
     using namespace std::string_literals;
     static std::unordered_map<std::string, int> numbers;
@@ -49,13 +51,12 @@ namespace output {
 
     Log::Assert(problem.out[0] != nullptr, "Array was not initialized.");
 
-    std::ostringstream datName, bovName;
-    datName  << dir << "/" << std::setw(4)<<std::setfill('0') << outNum_;
-    filesystem::create_directory(datName.str().c_str());
-    bovName << datName.str() << ".bov";
-    datName << "/" << name << "_" << std::setw(4)<<std::setfill('0')<< problem.BOVRank() << ".dat";
+    // Shared step directory (used by all variables)
+    std::ostringstream stepDir;
+    stepDir << dir << "/" << std::setw(4) << std::setfill('0') << outNum_;
+    filesystem::create_directory(stepDir.str());
 
-    int Ncell[3], Ntot=1;
+    int Ncell[3], Ntot = 1;
     field brickSize  [3];
     field brickOrigin[3] = {problem.D_->boxMin (0), problem.D_->boxMin (1), problem.D_->boxMin (2)};
 
@@ -69,35 +70,45 @@ namespace output {
       brickSize  [ii] = Ncell[ii] * problem.D_->cartDims(ii) * gr.dx[ii];
     }
 
-    FILE *fp = fopen(datName.str().c_str(), "wb"); // For datafiles
-    if(problem.out[0] != nullptr){
-      for (int ii = 0; ii < Ntot; ++ii){
-        for(int iVar = 0; iVar<FLD_TOT; ++iVar){
-          fwrite((void *) (&(problem.out[iVar][ii])), sizeof(field), 1, fp);
-        }
-      }
-    }
-    fclose(fp);
+    for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
+      //-- Data file: one contiguous write per variable
+      std::ostringstream datName;
+      datName << stepDir.str() << "/" << name << "_" << varLabel[iVar] << "_"
+              << std::setw(4) << std::setfill('0') << problem.BOVRank() << ".dat";
 
-    if( Log::isMaster() ){ // For header file
-      ofstream bov; bov.open(bovName.str(), ios_base::out);
-      bov<<"TIME: "<< problem.t()<<"\n";
-      bov<<"DATA_FILE: "<< std::setw(4)<<std::setfill('0') << outNum_ <<"/" << name << "_%04d.dat\n";
-      bov<<"DATA_SIZE: "<< Ncell[2]*problem.D_->cartDims(2) <<" " <<Ncell[1]*problem.D_->cartDims(1)<<" "<<Ncell[0]*problem.D_->cartDims(0)<<"\n";
+      FILE *fp = fopen(datName.str().c_str(), "wb");
+      if (problem.out[iVar] != nullptr) {
+        fwrite(problem.out[iVar], sizeof(field), Ntot, fp);
+      }
+      fclose(fp);
+
+      //-- BOV header: one per variable (master rank only)
+      if (Log::isMaster()) {
+        std::ostringstream bovName;
+        bovName << dir << "/" << std::setw(4) << std::setfill('0') << outNum_
+                << "_" << varLabel[iVar] << ".bov";
+        ofstream bov; bov.open(bovName.str(), ios_base::out);
+        bov << "TIME: " << problem.t() << "\n";
+        bov << "DATA_FILE: " << std::setw(4) << std::setfill('0') << outNum_
+            << "/" << name << "_" << varLabel[iVar] << "_%04d.dat\n";
+        bov << "DATA_SIZE: " << Ncell[2] * problem.D_->cartDims(2) << " "
+            << Ncell[1] * problem.D_->cartDims(1) << " "
+            << Ncell[0] * problem.D_->cartDims(0) << "\n";
 #ifdef SINGLE_PRECISION
-      bov<<"DATA_FORMAT: FLOAT\n";
+        bov << "DATA_FORMAT: FLOAT\n";
 #else
-      bov<<"DATA_FORMAT: DOUBLE\n";
+        bov << "DATA_FORMAT: DOUBLE\n";
 #endif
-      bov<<"VARIABLE: v\n";
-      bov<<"DATA_ENDIAN: LITTLE\n";
-      bov<<"CENTERING: zonal\n"; // Nicer if it was nodal, but it isn't
-      bov<<"BRICK_ORIGIN: "<< brickOrigin[2] <<" "<< brickOrigin[1] <<" "<< brickOrigin[0] <<"\n";
-      bov<<"BRICK_SIZE: "  << brickSize  [2] <<" "<< brickSize  [1] <<" "<< brickSize  [0] <<"\n";
-      bov<<"DIVIDE_BRICK: false\n";
-      bov<<"DATA_BRICKLETS: "<<Ncell     [2] <<" "<< Ncell      [1] <<" "<< Ncell      [0] <<"\n";
-      bov<<"DATA_COMPONENTS: "<<FLD_TOT<<"\n"; // 1->scalar 2->complex 3->vector 4+->many scalars, *unnamed*
-      bov<<std::flush; bov.close();
+        bov << "VARIABLE: " << varLabel[iVar] << "\n";
+        bov << "DATA_ENDIAN: LITTLE\n";
+        bov << "CENTERING: zonal\n";
+        bov << "BRICK_ORIGIN: " << brickOrigin[2] << " " << brickOrigin[1] << " " << brickOrigin[0] << "\n";
+        bov << "BRICK_SIZE: "  << brickSize[2]  << " " << brickSize[1]  << " " << brickSize[0]  << "\n";
+        bov << "DIVIDE_BRICK: false\n";
+        bov << "DATA_BRICKLETS: " << Ncell[2] << " " << Ncell[1] << " " << Ncell[0] << "\n";
+        bov << "DATA_COMPONENTS: 1\n";
+        bov << std::flush; bov.close();
+      }
     }
 
     Log::cout(0) << TAG << "Dumped " << dir << " (" << name << ") output #" << outNum_++ << Log::endl;
