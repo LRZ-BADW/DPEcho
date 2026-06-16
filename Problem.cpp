@@ -14,6 +14,7 @@
 #include "Physics.hpp"
 #include "Solver.hpp"
 #include <algorithm>
+#include <cstdio>
 #include <iomanip>
 #include <ios>
 
@@ -75,6 +76,78 @@ void Problem::waitOut() {
 #endif
 }
 
+void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
+  Log::Assert(out[0] != nullptr, "Array was not initialized.");
+
+  std::filesystem::create_directories(dir);
+
+  std::ostringstream stepDir;
+  stepDir << dir << "/" << std::setw(4) << std::setfill('0') << iOut_;
+  std::filesystem::create_directories(stepDir.str());
+
+  int Ncell[3];
+  field brickSize  [3];
+  field brickOrigin[3] = {D_->boxMin (0), D_->boxMin (1), D_->boxMin (2)};
+
+  for(int ii = 0; ii < 3; ++ii){
+    if(dumpHalos){
+      Ncell[ii] = gr.nh[ii];
+      brickOrigin[ii]*=(1.0*gr.nh[ii])/gr.n[ii];
+    } else {
+      Ncell[ii] = gr.n[ii];
+    }
+    brickSize[ii] = Ncell[ii] * D_->cartDims(ii) * gr.dx[ii];
+  }
+
+#ifndef MPICODE
+  int Ntot = 1;
+  for(int ii = 0; ii < 3; ++ii) Ntot *= Ncell[ii];
+#endif
+
+  for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
+#ifndef MPICODE
+    std::ostringstream datName;
+    datName << stepDir.str() << "/" << name << "_" << varLabel[iVar] << "_"
+            << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
+
+    FILE *fp = fopen(datName.str().c_str(), "wb");
+    if (out[iVar] != nullptr) {
+      fwrite(out[iVar], sizeof(field), Ntot, fp);
+    }
+    fclose(fp);
+#endif
+
+    if (Log::isMaster()) {
+      std::ostringstream bovName;
+      bovName << dir << "/" << varLabel[iVar] << "_"
+              << std::setw(4) << std::setfill('0') << iOut_ << ".bov";
+      ofstream bov; bov.open(bovName.str(), ios_base::out);
+      bov << "TIME: " << t() << "\n";
+      bov << "DATA_FILE: " << std::setw(4) << std::setfill('0') << iOut_
+          << "/" << name << "_" << varLabel[iVar] << "_%04d.dat\n";
+      bov << "DATA_SIZE: " << Ncell[2] * D_->cartDims(2) << " "
+          << Ncell[1] * D_->cartDims(1) << " "
+          << Ncell[0] * D_->cartDims(0) << "\n";
+#ifdef SINGLE_PRECISION
+      bov << "DATA_FORMAT: FLOAT\n";
+#else
+      bov << "DATA_FORMAT: DOUBLE\n";
+#endif
+      bov << "VARIABLE: v\n";
+      bov << "DATA_ENDIAN: LITTLE\n";
+      bov << "CENTERING: zonal\n";
+      bov << "BRICK_ORIGIN: " << brickOrigin[2] << " " << brickOrigin[1] << " " << brickOrigin[0] << "\n";
+      bov << "BRICK_SIZE: "  << brickSize[2]  << " " << brickSize[1]  << " " << brickSize[0]  << "\n";
+      bov << "DIVIDE_BRICK: false\n";
+      bov << "DATA_BRICKLETS: " << Ncell[2] << " " << Ncell[1] << " " << Ncell[0] << "\n";
+      bov << "DATA_COMPONENTS: 1\n";
+      bov << std::flush; bov.close();
+    }
+  }
+
+  Log::cout(0) << TAG << "Dumped " << dir << " (" << name << ") output #" << iOut_ << Log::endl;
+}
+
 void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){
 #if defined(FILE_IO_VISIT_BOV)
 #ifdef MPICODE
@@ -84,7 +157,6 @@ void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){
   if(dumpHalos){
     for(int iVar=0; iVar<FLD_TOT; ++iVar) qq.memcpy(out[iVar], v[iVar], gr.nht*sizeof(field)); // Direct memcpy
   } else {  // Manual indexing necessary
-    field *vt[FLD_TOT]; for (int i = 0; i < FLD_TOT; i++) vt[i] = v[i];
     field *outt[FLD_TOT]; for (int i = 0; i < FLD_TOT; i++) outt[i] = out[i];
     qq.parallel_for<class parForDump>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
       auto iOut= it.get_linear_id(); // Output array has NH halo scope here
@@ -95,7 +167,7 @@ void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){
   }
   qq.wait_and_throw();
   // Host code: .bov headers (and serial .dat fallback without MPI)
-  output::writeArray(*this, gr, dir, name);
+  writeBOV(gr, dir, name);
   // MPI: start async .dat writes
 #ifdef MPICODE
   {
@@ -108,7 +180,7 @@ void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){
     for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
       std::ostringstream datName;
       datName << dir << "/" << std::setw(4) << std::setfill('0') << iOut_
-              << "/" << name << "_" << output::varLabel[iVar] << "_"
+              << "/" << name << "_" << varLabel[iVar] << "_"
               << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
       MPI_File_open(MPI_COMM_SELF, datName.str().c_str(),
                     MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &out_fh[iVar]);

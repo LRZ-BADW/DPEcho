@@ -16,8 +16,8 @@ project( DPEcho
 )
 
 add_executable (dpecho
-  echo.cpp Logger.cpp Grid.cpp Domain.cpp Problem.cpp Physics.cpp Metric.cpp Solver.cpp Output.cpp Device.cpp Parameters.cpp
-  echo.hpp Logger.hpp Grid.hpp Domain.hpp Problem.hpp Physics.hpp Metric.hpp Solver.hpp Output.hpp Device.hpp Parameters.hpp
+  echo.cpp Logger.cpp Grid.cpp Domain.cpp Problem.cpp Physics.cpp Metric.cpp Solver.cpp Device.cpp Parameters.cpp
+  echo.hpp Logger.hpp Grid.hpp Domain.hpp Problem.hpp Physics.hpp Metric.hpp Solver.hpp Device.hpp Parameters.hpp
 )
 set_target_properties(dpecho PROPERTIES OUTPUT_NAME "dpecho")
 set_property(TARGET dpecho PROPERTY CXX_STANDARD 17)
@@ -164,7 +164,7 @@ else()
 endif(SINGLE_PRECISION)
 
 
-find_package(Boost)
+find_package(Boost CONFIG QUIET)
 option(ENERGY_METER "Provide ./deltaEnergy.sh with user-defined command in run folder to print used energy." OFF)
 if(Boost_FOUND AND ENERGY_METER)
   set(SUFFIX "${SUFFIX}_nrg")

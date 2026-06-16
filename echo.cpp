@@ -16,7 +16,6 @@
 #include "Physics.hpp"
 #include "Solver.hpp"
 #include "Metric.hpp"
-#include "Output.hpp"
 #include "Device.hpp"
 #include "Parameters.hpp"
 

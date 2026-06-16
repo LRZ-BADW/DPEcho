@@ -9,7 +9,6 @@
 //  See the License for the specific language governing permissions and limitations under the License.
 
 #include "Logger.hpp"
-#include "Output.hpp"
 
 #ifdef MPICODE
 #include <mpi.h>
@@ -19,14 +18,11 @@
 #include <ittnotify.h>
 #endif
 
+#include <filesystem>
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
-
-namespace std::filesystem {
-  void create_directory(std::string name);
-}
 
 std::ofstream Log::logFile;
 int Log::coutVerbosity;
@@ -43,11 +39,11 @@ void Log::init(std::string logfileName, int coutVerb, int clogVerb) {
   rank = mpiRank();
 
   if (!rank) {
-    std::filesystem::create_directory(logfileName);
+    std::filesystem::create_directories(logfileName);
   }
   MPI_Barrier(MPI_COMM_WORLD);
 #else
-  std::filesystem::create_directory(logfileName);
+  std::filesystem::create_directories(logfileName);
 #endif
   std::string rankStr = std::to_string(rank); rankStr.insert(0, 8-rankStr.length(), '0');
   logfileName = logfileName + "/"s + rankStr;

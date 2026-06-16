@@ -14,14 +14,13 @@
 #include "echo.hpp"
 #include "Domain.hpp"
 #include "Grid.hpp"
-#include "Output.hpp"
 #include "Parameters.hpp"
 #include "utils/tb-types.hpp"
 #include "utils/tb-timer.hpp"
 
-class Problem {
+#include <filesystem>
 
-  friend void output::writeArray(Problem &, Grid &, std::string, std::string);
+class Problem {
 
   public:
     int locSize;
@@ -59,6 +58,10 @@ class Problem {
     void BlastWave(field_array &v, field_array &u);
 
   private:
+    void writeBOV(Grid &gr, std::string dir, std::string name);
+    static constexpr const char* varLabel[FLD_TOT] = {
+        "RH", "VX", "VY", "VZ", "PG", "BX", "BY", "BZ"
+    };
     Parameters &config;
     sycl::queue qq;
     TB::Timer stepTime_;
