@@ -13,11 +13,11 @@
 #include "Logger.hpp"
 
 //-- Constructor; better all in one go
-Grid::Grid( int nx, int ny, int nz, int hx, int hy, int hz, field xmin, field xmax,field ymin, field ymax, field zmin, field zmax):
+Grid::Grid( int nx, int ny, int nz, int hx, int hy, int hz, real xmin, real xmax,real ymin, real ymax, real zmin, real zmax):
   n  {nx , ny , nz},  h{hx, hy, hz},  nh  { nx+2*hx, ny+2*hy, nz+2*hz},
   nt {nx * ny * nz},  nht{nh[0] * nh[1] * nh[2]},
   xMin{ xmin,ymin,zmin},               xMax{xmax,ymax,zmax},
-  dx  {(xmax-xmin)/((field)nx), (ymax-ymin)/((field)ny), (zmax-zmin)/((field)nz)},
+  dx  {(xmax-xmin)/((real)nx), (ymax-ymin)/((real)ny), (zmax-zmin)/((real)nz)},
   hMin{ xmin-hx*dx[0], ymin-hy*dx[1], zmin-hz*dx[2]},
   hMax{ xmax+hx*dx[0], ymax+hy*dx[1], zmax+hz*dx[2]}{
   // This is a memorial for a nice algo :)

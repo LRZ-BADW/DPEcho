@@ -41,8 +41,8 @@ class Parameters {
       if (has(key)) {
         if constexpr (std::is_same_v<int, T>) {
           return std::stoi(parameters[key]);
-        } else if constexpr (std::is_same_v<field, T>) {
-          return static_cast<field>(std::stod(parameters[key]));
+        } else if constexpr (std::is_same_v<real, T>) {
+          return static_cast<real>(std::stod(parameters[key]));
         } else if constexpr (std::is_convertible_v<T, std::string>) {
           return parameters[key];
         }

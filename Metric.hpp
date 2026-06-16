@@ -20,14 +20,14 @@
 
 class Metric {
   private:
-    [[maybe_unused]] field x[3];
+    [[maybe_unused]] real x[3];
 
   public:
-    Metric (field x0, field x1, field x2) : x{x0, x1, x2 } {} // Initialize x directly upon construction. Theory: not doing so causes issues with computations below.
+    Metric (real x0, real x1, real x2) : x{x0, x1, x2 } {} // Initialize x directly upon construction. Theory: not doing so causes issues with computations below.
 #if METRIC > CARTESIAN
-    static field bhm, bha, bhc;
+    static real bhm, bha, bhc;
     // read them from file on host (in main) and set here once...
-    static inline void setParameters(field mm, field aa, field cc) {
+    static inline void setParameters(real mm, real aa, real cc) {
       Metric::bhm = mm; Metric::bha = aa; Metric::bhc = cc;
 #if METRIC == KERR_SCHILD
 #warning "The Kerr-Schild Metric is not tested (may be incorrect!) and has no proper Problem case. It is expected to fail!"
@@ -35,48 +35,48 @@ class Metric {
 #endif
     }
 #else // For uniformity
-    static inline void setParameters(field bhm, field bha, field bhc) {}
+    static inline void setParameters(real bhm, real bha, real bhc) {}
 #endif
 
 #if   METRIC == CARTESIAN   // Nothing needed
 #elif METRIC == KERR_SCHILD // declare needed vars
   // WOW!!!
-  const field r2 = x[0]*x[0], sint = sycl::sin(x[1]), sint2 = sint*sint, cost = sycl::cos(x[1]);
-  const field a = bha, a2 = a*a, delta= r2-2.*bhm*x[0]+a2, rho2 = r2+a2*(1.-sint2), zz = 2.*bhm*x[0]/rho2;
-  const field sigma = (r2+a2)*(r2+a2)-a2*delta*sint2, det = (1.+zz)*(sigma/rho2-a2*(1.+zz)*sint2);
+  const real r2 = x[0]*x[0], sint = sycl::sin(x[1]), sint2 = sint*sint, cost = sycl::cos(x[1]);
+  const real a = bha, a2 = a*a, delta= r2-2.*bhm*x[0]+a2, rho2 = r2+a2*(1.-sint2), zz = 2.*bhm*x[0]/rho2;
+  const real sigma = (r2+a2)*(r2+a2)-a2*delta*sint2, det = (1.+zz)*(sigma/rho2-a2*(1.+zz)*sint2);
   // For derivatives TODO: maybe make these into a function Metric::initDeriv(), to avoid these when not needed?
-  const field dxlogrho2 = 2*x[0]/rho2, dxlogsigma = (4*x[0]*(r2+a2)-2*(x[0]-bhm)*a2*sint2)/sigma, dxlogzz = 1./x[0]-dxlogrho2;
-  const field dylogrho2 =-2*a2*sint*cost/rho2, dylogsigma = -2*a2*delta*sint*cost/sigma, dylogzz =-dylogrho2;
+  const real dxlogrho2 = 2*x[0]/rho2, dxlogsigma = (4*x[0]*(r2+a2)-2*(x[0]-bhm)*a2*sint2)/sigma, dxlogzz = 1./x[0]-dxlogrho2;
+  const real dylogrho2 =-2*a2*sint*cost/rho2, dylogsigma = -2*a2*delta*sint*cost/sigma, dylogzz =-dylogrho2;
 #endif
     // --- These functions are expected to be user-provided.
     // Metrics: individual elements (SYCL only for now)
-    SYCL_EXTERNAL field alpha();                                   // Time element of the metric. Will put many #ifdef cases.
-    SYCL_EXTERNAL field betai(unsigned short i);                   // Each mixed element of the metric
-    SYCL_EXTERNAL field gCon (unsigned short i, unsigned short j); // Each element of 3D (spatial) metric
-    SYCL_EXTERNAL field gCov (unsigned short i, unsigned short j); // Each element of 3D (spatial) metric
-    SYCL_EXTERNAL field gDet (), gDet1 ();                         // For notation
+    SYCL_EXTERNAL real alpha();                                   // Time element of the metric. Will put many #ifdef cases.
+    SYCL_EXTERNAL real betai(unsigned short i);                   // Each mixed element of the metric
+    SYCL_EXTERNAL real gCon (unsigned short i, unsigned short j); // Each element of 3D (spatial) metric
+    SYCL_EXTERNAL real gCov (unsigned short i, unsigned short j); // Each element of 3D (spatial) metric
+    SYCL_EXTERNAL real gDet (), gDet1 ();                         // For notation
     // Derivatives
-    SYCL_EXTERNAL field dgAlpha(unsigned short i);
-    SYCL_EXTERNAL field dgBeta (unsigned short i, unsigned short j);
-    SYCL_EXTERNAL field dgCov  (unsigned short i, unsigned short j, unsigned short k);
+    SYCL_EXTERNAL real dgAlpha(unsigned short i);
+    SYCL_EXTERNAL real dgBeta (unsigned short i, unsigned short j);
+    SYCL_EXTERNAL real dgCov  (unsigned short i, unsigned short j, unsigned short k);
     // END These functions are expected to be user-provided.
 
     // --- These functions are convenience functions, no modifications should be needed here.
-    SYCL_EXTERNAL void  beta  (field bet[3]);
-    SYCL_EXTERNAL field g3DCon(field g[9]);
-    SYCL_EXTERNAL field g3DCov(field g[9]);
-    SYCL_EXTERNAL void con2Cov(field vCon[3], field vCov[3]);
-    SYCL_EXTERNAL void cov2Con(field vCov[3], field vCon[3]);
+    SYCL_EXTERNAL void  beta  (real bet[3]);
+    SYCL_EXTERNAL real g3DCon(real g[9]);
+    SYCL_EXTERNAL real g3DCov(real g[9]);
+    SYCL_EXTERNAL void con2Cov(real vCon[3], real vCov[3]);
+    SYCL_EXTERNAL void cov2Con(real vCov[3], real vCon[3]);
     // Maybe not needed?
-    SYCL_EXTERNAL void  g4DCon(field g[16]);
-    SYCL_EXTERNAL void  g4DCov(field g[16]);
+    SYCL_EXTERNAL void  g4DCon(real g[16]);
+    SYCL_EXTERNAL void  g4DCov(real g[16]);
     // END These functions are convenience functions, no modifications should be needed here.
 };
 
 #if METRIC == KERR_SCHILD
-inline field Metric::bhm = static_cast<field>(1);
-inline field Metric::bha = static_cast<field>(0);
-inline field Metric::bhc = static_cast<field>(0);
+inline real Metric::bhm = static_cast<real>(1);
+inline real Metric::bha = static_cast<real>(0);
+inline real Metric::bhc = static_cast<real>(0);
 #endif
 
 #endif

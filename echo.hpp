@@ -32,12 +32,10 @@
 #define FLD_TOT 8 // (FLD_SCA + 3*FLD_VEC)  Tot fields
 #endif
 
-#ifdef MPICODE
 #define SR_REPLACE 1
 #define SENDRECV 2
 #define ISEND 3
 #define START 4
-#endif
 
 //-- Holib stuff
 #ifdef  RECONSTR

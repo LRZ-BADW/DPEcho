@@ -22,26 +22,26 @@ class Grid {
 
   public: // All numbers of points along the 3 directions
     const int n[3], h[3], nh[3], nt, nht;
-    const field xMin[3], xMax[3], dx[3], hMin[3], hMax[3];  // Physical point distances
+    const real xMin[3], xMax[3], dx[3], hMin[3], hMax[3];  // Physical point distances
 
-    Grid(int, int, int, int, int, int, field, field, field, field, field, field);
+    Grid(int, int, int, int, int, int, real, real, real, real, real, real);
 
     void print();
 
     //-- Device code: beware the indexing!
     // Retrieve cell Coordinates (USE INNER grid indexing, a.k.a NH indexing!!)
     // If it the parallel_for range is NOT NH, add proper offsets to global_id() to get i3
-    inline field xL (     sycl::id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] * i3[myDir]     ; }
-    inline field xC (     sycl::id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] *(i3[myDir]+0.5); }
-    inline field xR (     sycl::id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] *(i3[myDir]+1.0); }
+    inline real xL (     sycl::id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] * i3[myDir]     ; }
+    inline real xC (     sycl::id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] *(i3[myDir]+0.5); }
+    inline real xR (     sycl::id<3> i3, int myDir) const { return xMin[myDir] + dx[myDir] *(i3[myDir]+1.0); }
     // Convenient shortcuts when parallel_for range is NH, you can just pass the nd_item
-    inline field xL (sycl::nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] * it.get_global_id(myDir)     ; }
-    inline field xC (sycl::nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+0.5); }
-    inline field xR (sycl::nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+1.0); }
+    inline real xL (sycl::nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] * it.get_global_id(myDir)     ; }
+    inline real xC (sycl::nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+0.5); }
+    inline real xR (sycl::nd_item<3> it, int myDir) const { return xMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+1.0); }
     // Same as above, but for full WH indexing (based on hMin values)
-    inline field xLh(sycl::nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] * it.get_global_id(myDir)     ; }
-    inline field xCh(sycl::nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+0.5); }
-    inline field xRh(sycl::nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+1.0); }
+    inline real xLh(sycl::nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] * it.get_global_id(myDir)     ; }
+    inline real xCh(sycl::nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+0.5); }
+    inline real xRh(sycl::nd_item<3> it, int myDir) const { return hMin[myDir] + dx[myDir] *(it.get_global_id(myDir)+1.0); }
 };
 
 //-- General Indexing methods (work for any SYCL range, not just the grid!)

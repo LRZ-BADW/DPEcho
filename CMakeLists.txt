@@ -16,7 +16,9 @@ project( DPEcho
 )
 
 add_executable (dpecho
-  echo.cpp Logger.cpp Grid.cpp Domain.cpp Problem.cpp Physics.cpp Metric.cpp Solver.cpp Device.cpp Parameters.cpp
+  echo.cpp Logger.cpp Grid.cpp Domain.cpp Problem.cpp Metric.cpp Solver.cpp Device.cpp Parameters.cpp
+  $<$<STREQUAL:${PHYSICS},MHD>:Physics/MHD.cpp>
+  $<$<STREQUAL:${PHYSICS},GRMHD>:Physics/GRMHD.cpp>
   echo.hpp Logger.hpp Grid.hpp Domain.hpp Problem.hpp Physics.hpp Metric.hpp Solver.hpp Device.hpp Parameters.hpp
 )
 set_target_properties(dpecho PROPERTIES OUTPUT_NAME "dpecho")
@@ -94,29 +96,18 @@ else()
   message(STATUS "VTune Profiler unavailable. Consider making it available at configuration time it if you plan on using VTune.")
 endif(VTune_FOUND)
 
-#-- What to do for MPI-Parallel code
-set(MPI OFF CACHE STRING "Select the mode of parallel execution. OFF for buildig w/o MPI. For MPI builds, SR_REPLACE is best tested.")
-set(MPI_VALS  OFF SR_REPLACE SENDRECV ISEND START)
+#-- MPI is mandatory
+set(MPI SENDRECV CACHE STRING "Select the MPI communication mode. SENDRECV is best tested.")
+set(MPI_VALS  SR_REPLACE SENDRECV ISEND START)
 set_property(CACHE MPI PROPERTY STRINGS ${MPI_VALS})
-if (NOT MPI STREQUAL "OFF")
-  find_package(MPI)
-  if (MPI_FOUND)
-    string(TOLOWER ${MPI} MYMPI)
-    set(SUFFIX "${SUFFIX}_${MYMPI}")
-    target_link_libraries(dpecho PUBLIC ${MPI_CXX_LIBRARIES})
-    target_include_directories(dpecho PRIVATE ${MPI_CXX_INCLUDE_DIRS})
-    target_compile_definitions(dpecho PRIVATE MPICODE=${MPI})
-    target_compile_options(dpecho PRIVATE ${MPI_CXX_COMPILE_OPTIONS})
-    message(STATUS "Configuring Echo with MPI support")
-  else()
-    message(FATAL_ERROR "MPI enabled but not found")
-  endif()
-else()
-  message(STATUS  "Configuring Echo without MPI")
-  if (VTune_FOUND)
-    message(STATUS "Trying VTune profiling w/o MPI: calls to MPI_PControl will be disabled!")
-  endif()
-endif()
+find_package(MPI REQUIRED)
+string(TOLOWER ${MPI} MYMPI)
+set(SUFFIX "${SUFFIX}_${MYMPI}")
+target_link_libraries(dpecho PUBLIC ${MPI_CXX_LIBRARIES})
+target_include_directories(dpecho PRIVATE ${MPI_CXX_INCLUDE_DIRS})
+target_compile_definitions(dpecho PRIVATE MPICODE=${MPI})
+target_compile_options(dpecho PRIVATE ${MPI_CXX_COMPILE_OPTIONS})
+message(STATUS "Configuring Echo with MPI (mode: ${MPI})")
 
 set(WARNINGS REASONABLE CACHE STRING "Select the warning level.")
 set(WARNINGS_VALS MINIMAL REASONABLE PEDANTIC EXCESSIVE)

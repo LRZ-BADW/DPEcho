@@ -21,10 +21,10 @@
 using namespace std;
 using namespace sycl;
 
-Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, field_array &fld ): config(parFile) {
+Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, real_array &fld ): config(parFile) {
   grid_ = grid; D_ = D; N_ = grid_->nht;
   iOut_ = 0; iStep_ = 0; nStep_ = config.getOr("nStep", 0);  dumpHalos = static_cast<bool>(config.getOr("dumpHalos", 0)); locSize = config.getOr("locSize", 1);
-  tMax_   = config.getOr<field>("tMax", 1.0); dt_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8/3.0; // Divide by 3 as it's 3D
+  tMax_   = config.getOr<real>("tMax", 1.0); dt_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8/3.0; // Divide by 3 as it's 3D
   qq = qx;
   stepTime_.init();
 
@@ -43,7 +43,7 @@ Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, fie
 }
 
 //-- Timing and Output (this class has all, useless to make another one)
-void Problem::dtUpdate(field aMax){
+void Problem::dtUpdate(real aMax){
   dt_ = std::min(cfl_/aMax, tOut_*(iOut_+1) -t_ + 1.e-6*tOut_*(iOut_+1));
   dt_ = std::min(cfl_/aMax, tMax_           -t_ + 1.e-6*tMax_          );
   t_ += dt_;
@@ -67,13 +67,11 @@ void Problem::dtUpdate(field aMax){
 }
 
 void Problem::waitOut() {
-#ifdef MPICODE
   if (out_pending) {
     MPI_Waitall(FLD_TOT, out_req, MPI_STATUSES_IGNORE);
     for (int i = 0; i < FLD_TOT; ++i) MPI_File_close(&out_fh[i]);
     out_pending = false;
   }
-#endif
 }
 
 void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
@@ -86,8 +84,8 @@ void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
   std::filesystem::create_directories(stepDir.str());
 
   int Ncell[3];
-  field brickSize  [3];
-  field brickOrigin[3] = {D_->boxMin (0), D_->boxMin (1), D_->boxMin (2)};
+  real brickSize  [3];
+  real brickOrigin[3] = {D_->boxMin (0), D_->boxMin (1), D_->boxMin (2)};
 
   for(int ii = 0; ii < 3; ++ii){
     if(dumpHalos){
@@ -99,23 +97,7 @@ void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
     brickSize[ii] = Ncell[ii] * D_->cartDims(ii) * gr.dx[ii];
   }
 
-#ifndef MPICODE
-  int Ntot = 1;
-  for(int ii = 0; ii < 3; ++ii) Ntot *= Ncell[ii];
-#endif
-
   for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
-#ifndef MPICODE
-    std::ostringstream datName;
-    datName << stepDir.str() << "/" << name << "_" << varLabel[iVar] << "_"
-            << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
-
-    FILE *fp = fopen(datName.str().c_str(), "wb");
-    if (out[iVar] != nullptr) {
-      fwrite(out[iVar], sizeof(field), Ntot, fp);
-    }
-    fclose(fp);
-#endif
 
     if (Log::isMaster()) {
       std::ostringstream bovName;
@@ -128,11 +110,7 @@ void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
       bov << "DATA_SIZE: " << Ncell[2] * D_->cartDims(2) << " "
           << Ncell[1] * D_->cartDims(1) << " "
           << Ncell[0] * D_->cartDims(0) << "\n";
-#ifdef SINGLE_PRECISION
-      bov << "DATA_FORMAT: FLOAT\n";
-#else
-      bov << "DATA_FORMAT: DOUBLE\n";
-#endif
+      bov << "DATA_FORMAT: " << FIELD_FORMAT << "\n";
       bov << "VARIABLE: v\n";
       bov << "DATA_ENDIAN: LITTLE\n";
       bov << "CENTERING: zonal\n";
@@ -148,16 +126,16 @@ void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
   Log::cout(0) << TAG << "Dumped " << dir << " (" << name << ") output #" << iOut_ << Log::endl;
 }
 
-void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){
+void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
 #if defined(FILE_IO_VISIT_BOV)
 #ifdef MPICODE
   waitOut();
 #endif
-  // Device code: update *out with provided field
+  // Device code: update *out with provided real
   if(dumpHalos){
-    for(int iVar=0; iVar<FLD_TOT; ++iVar) qq.memcpy(out[iVar], v[iVar], gr.nht*sizeof(field)); // Direct memcpy
+    for(int iVar=0; iVar<FLD_TOT; ++iVar) qq.memcpy(out[iVar], v[iVar], gr.nht*sizeof(real)); // Direct memcpy
   } else {  // Manual indexing necessary
-    field *outt[FLD_TOT]; for (int i = 0; i < FLD_TOT; i++) outt[i] = out[i];
+    real *outt[FLD_TOT]; for (int i = 0; i < FLD_TOT; i++) outt[i] = out[i];
     qq.parallel_for<class parForDump>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
       auto iOut= it.get_linear_id(); // Output array has NH halo scope here
       auto iV  = globLinId(it.get_id(), gr.nh, gr.h); // v has WH indexing; offset by halos
@@ -166,10 +144,9 @@ void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){
     });
   }
   qq.wait_and_throw();
-  // Host code: .bov headers (and serial .dat fallback without MPI)
+  // Host code: .bov headers
   writeBOV(gr, dir, name);
   // MPI: start async .dat writes
-#ifdef MPICODE
   {
     int Ncell[3], Ntot = 1;
     for(int ii = 0; ii < 3; ++ii){
@@ -184,15 +161,10 @@ void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){
               << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
       MPI_File_open(MPI_COMM_SELF, datName.str().c_str(),
                     MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &out_fh[iVar]);
-#ifdef SINGLE_PRECISION
-      MPI_File_iwrite(out_fh[iVar], out[iVar], Ntot, MPI_FLOAT, &out_req[iVar]);
-#else
-      MPI_File_iwrite(out_fh[iVar], out[iVar], Ntot, MPI_DOUBLE, &out_req[iVar]);
-#endif
+      MPI_File_iwrite(out_fh[iVar], out[iVar], Ntot, MPI_REAL, &out_req[iVar]);
     }
     out_pending = true;
   }
-#endif
 #elif defined(FILE_IO_DISABLED)
   // Do nothing.
 #else
@@ -201,7 +173,7 @@ void Problem::dump(field_array &v, Grid &gr, std::string dir, std::string name){
   iOut_++;
 }
 
-void Problem::InitConstWH(field *v, field val) { // HOST CODE: kernel for initialization.
+void Problem::InitConstWH(real *v, real val) { // HOST CODE: kernel for initialization.
   Log::Assert(v, "Array was not initialized.");
   qq.parallel_for<class parForInitConstWH>(range<3>(grid_->nh[0], grid_->nh[1], grid_->nh[2]), [=, gr = *(this->grid_)](item<3> it) {
     int offset[3] = {0,0,0};
@@ -210,7 +182,7 @@ void Problem::InitConstWH(field *v, field val) { // HOST CODE: kernel for initia
   });
 }
 
-void Problem::InitConstNH(field *v, field val) { // HOST CODE: kernel for initialization.
+void Problem::InitConstNH(real *v, real val) { // HOST CODE: kernel for initialization.
   Log::Assert(v, "Array was not initialized.");
   qq.parallel_for<class parForInitConstNH>(range<3>(grid_->n[0], grid_->n[1], grid_->n[2]), [=, gr = *(this->grid_)](item<3> it) {
     auto iV  = globLinId(it, gr.nh, gr.h); // v has WH indexing; offset by halos
@@ -218,7 +190,7 @@ void Problem::InitConstNH(field *v, field val) { // HOST CODE: kernel for initia
   });
 }
 
-void Problem::init(field_array &v, field_array &u) {
+void Problem::init(real_array &v, real_array &u) {
   using namespace std::string_literals;
   string problemName = config.getOr("problem", "INVALID"s);
   if (problemName == "Uniform"s) {
@@ -235,7 +207,7 @@ void Problem::init(field_array &v, field_array &u) {
 }
 
 ////-- Problem-specific ICs
-void Problem::Uniform(field_array &v, field_array &u){ // HOST CODE: Initializing
+void Problem::Uniform(real_array &v, real_array &u){ // HOST CODE: Initializing
   auto xx = config.getOr("uniConst", 1.0);
   InitConstWH(v[RH], xx);  InitConstWH(v[PG], 1.); // this is all device code
   InitConstWH(v[VX], .5);  InitConstWH(v[VY], .5); InitConstWH(v[VZ], .5);
@@ -259,37 +231,37 @@ void Problem::Uniform(field_array &v, field_array &u){ // HOST CODE: Initializin
   Log::cout(0) << TAG << "Initialized Problem Uniform in " << stepTime_.lap() << Log::endl;
 }
 
-void Problem::Alfven(field_array &v, field_array &u){ // HOST CODE: Initializing
-  field alfRH = config.getOr<field>("alfRH", 1.0), alfB0 = config.getOr<field>("alfB0", 1.0), alfPG = config.getOr<field>("alfPG", 1.0), alfAmp=config.getOr<field>("alfAmp", 1.0);
-  field alfLx = config.getOr<field>("alfLx", 1.0), alfLy = config.getOr<field>("alfLy", 1.0), alfLz = config.getOr<field>("alfLz", 1.0);
-  tMax_ = config.getOr<field>("tMax", 1.0);
+void Problem::Alfven(real_array &v, real_array &u){ // HOST CODE: Initializing
+  real alfRH = config.getOr<real>("alfRH", 1.0), alfB0 = config.getOr<real>("alfB0", 1.0), alfPG = config.getOr<real>("alfPG", 1.0), alfAmp=config.getOr<real>("alfAmp", 1.0);
+  real alfLx = config.getOr<real>("alfLx", 1.0), alfLy = config.getOr<real>("alfLy", 1.0), alfLz = config.getOr<real>("alfLz", 1.0);
+  tMax_ = config.getOr<real>("tMax", 1.0);
   stepTime_.on();
 
-  field kx = alfLx ? 2*M_PI/alfLx:0.0,  ky = alfLy ? 2*M_PI/alfLy:0.0, kz = alfLz ? 2*M_PI/alfLz:0.0;
+  real kx = alfLx ? 2*M_PI/alfLx:0.0,  ky = alfLy ? 2*M_PI/alfLy:0.0, kz = alfLz ? 2*M_PI/alfLz:0.0;
   Log::cout(4) << TAG << "kxyz " << kx << " " << ky << " " << kz << Log::endl;
 
 #if PHYSICS==MHD
-  field va = alfB0 / std::sqrt(alfRH);
+  real va = alfB0 / std::sqrt(alfRH);
 #elif PHYSICS==GRMHD
-  field wt  = alfRH + (GAMMA1)*alfPG + alfB0*alfB0*(1+alfAmp*alfAmp);
-  field tmp = 2*alfAmp*alfB0*alfB0/wt;
-  field va  = alfB0 / std::sqrt( wt* 0.5 *(1.+std::sqrt(1.-tmp*tmp) ) );
-  field vmul= 1.0/std::sqrt(1.0 - (alfAmp*alfAmp*va*va));
+  real wt  = alfRH + (GAMMA1)*alfPG + alfB0*alfB0*(1+alfAmp*alfAmp);
+  real tmp = 2*alfAmp*alfB0*alfB0/wt;
+  real va  = alfB0 / std::sqrt( wt* 0.5 *(1.+std::sqrt(1.-tmp*tmp) ) );
+  real vmul= 1.0/std::sqrt(1.0 - (alfAmp*alfAmp*va*va));
 #endif
   if(1.0 == tMax_ ){ tMax_ = 2*M_PI / (va * std::hypot(kx, ky, kz) ); } // C++17 :)
   Log::cout(0) << TAG << "tMax  is set to " << tMax_ << Log::endl;
-  field alp = std::atan2(ky,kx), bet = std::atan2(kz,kx), gam = std::atan2(kz, std::hypot(kx, ky));
+  real alp = std::atan2(ky,kx), bet = std::atan2(kz,kx), gam = std::atan2(kz, std::hypot(kx, ky));
 
   Log::cout(4) << TAG << "alp bet gam va " << alp << " " << bet << " " << gam << " " << va << Log::endl;
 
-  field rot[9]={ std::cos(alp)*std::cos(gam),-std::sin(alp),-std::cos(alp)*std::sin(gam),
+  real rot[9]={ std::cos(alp)*std::cos(gam),-std::sin(alp),-std::cos(alp)*std::sin(gam),
                  std::sin(alp)*std::cos(gam), std::cos(alp),-std::sin(alp)*std::sin(gam),
                                std::sin(gam), 0.           ,               std::cos(gam) };
   //-- Device code
-  field bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
+  real bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
   Grid gr = *grid_; // For ease of lambda capture
   qq.parallel_for<class parForProblemAlfven>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
-    field phi = 0.0, bx, by, bz, vx, vy, vz;
+    real phi = 0.0, bx, by, bz, vx, vy, vz;
     auto i = globLinId(it, gr.nh, gr.h); // Addressing fld: WH indexing
 
     phi = alfLz * (gr.xC(it,2)/bS[2]+0.5) + // Cell centers use it here, i.e. NH indexing -> fine
@@ -325,19 +297,19 @@ void Problem::Alfven(field_array &v, field_array &u){ // HOST CODE: Initializing
   Log::cout() << TAG << "Initialized Problem Alfven in "<<stepTime_.lap() << Log::endl;
 }
 
-void Problem::BlastWave(field_array &v, field_array &u){ // HOST CODE: Initializing
-  field r0 = config.getOr("r0", 0.8);
-  field b0 = 1.0 / sycl::sqrt(2.0), rh0 = 1e-4, pg0 = 5e-3, rh1 = 1e-2, pg1 = 1.0;
-  field bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
+void Problem::BlastWave(real_array &v, real_array &u){ // HOST CODE: Initializing
+  real r0 = config.getOr("r0", 0.8);
+  real b0 = 1.0 / sycl::sqrt(2.0), rh0 = 1e-4, pg0 = 5e-3, rh1 = 1e-2, pg1 = 1.0;
+  real bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
   Grid gr = *this->grid_;
 
   Log::cout(0) << TAG << "WARNING: The Blastwave Problem is not fully tested for lack of BCs. May yield inconsistent results. " << Log::endl;
 
   qq.parallel_for<class parForProblemBlastwave>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
     auto i = globLinId(it, gr.nh, gr.h);
-    field xC = gr.xC(it,0) / bS[0], yC = gr.xC(it,1) / bS[1], zC = gr.xC(it,2) / bS[2];
-    field r = sycl::sqrt(xC * xC + yC * yC + zC * zC);
-    field f = sycl::max(1.0 / pown(1.0 + (r / r0), 16), 1e-6);
+    real xC = gr.xC(it,0) / bS[0], yC = gr.xC(it,1) / bS[1], zC = gr.xC(it,2) / bS[2];
+    real r = sycl::sqrt(xC * xC + yC * yC + zC * zC);
+    real f = sycl::max(1.0 / pown(1.0 + (r / r0), 16), 1e-6);
 
     // Initialization
     v[VX][i] = 0.0;

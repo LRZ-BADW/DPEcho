@@ -13,19 +13,24 @@
 #define _TOOLBOX_TYPE_H_
 
 #include "../echo.hpp"
+#include <mpi.h>
 
 #ifdef SINGLE_PRECISION
-typedef float field;
-#define MPI_FIELD MPI_FLOAT
+typedef float real;
+#undef MPI_REAL
+#define MPI_REAL MPI_FLOAT
+constexpr const char* FIELD_FORMAT = "FLOAT";
 #else
-typedef double field;
-#define MPI_FIELD MPI_DOUBLE
+typedef double real;
+#undef MPI_REAL
+#define MPI_REAL MPI_DOUBLE
+constexpr const char* FIELD_FORMAT = "DOUBLE";
 #endif
 
 
-typedef field coord[3];
+typedef real coord[3];
 typedef unsigned int icoord[3];
 
-using field_array = field *const[FLD_TOT];
+using real_array = real *const[FLD_TOT];
 
 #endif

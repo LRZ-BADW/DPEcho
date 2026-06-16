@@ -13,13 +13,7 @@
 #define _TOOLBOX_TIMER_H_
 
 #include <string>
-#ifdef MPICODE
 #include <mpi.h>
-#else
-#include <sys/time.h>
-#include <cstddef>
-#include <cstdlib>
-#endif
 
 #ifdef TB_ENERGY
 #include <boost/process.hpp>
@@ -42,15 +36,7 @@ namespace TB {
       double energyAccu_ = 0.0;
 #endif
       std::vector<double> laps;
-#ifndef MPICODE
-      struct timeval TT;
-      inline double get() {
-        gettimeofday(&TT, (struct timezone *) NULL);
-        return (TT.tv_sec)+(TT.tv_usec)*static_cast<double>(0.000001);
-      }
-#else
       inline double get() {	return MPI_Wtime(); }
-#endif
 
 #ifdef TB_ENERGY
       boost::process::ipstream powerScriptInput;
@@ -113,7 +99,6 @@ namespace TB {
       std::string getTimings() {
       	int rank = 0, totalRanks = 1;
       	std::stringstream buf;
-#ifdef MPICODE
       	std::vector<double> allResults;
       	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
       	MPI_Comm_size(MPI_COMM_WORLD, &totalRanks);
@@ -136,27 +121,24 @@ namespace TB {
             if (r == 0 || curRes < stepMin[l]) {
           		stepMin[l] = curRes;
           		stepMinLoc[l] = r;
-     	      }
-	          if (r == 0 || curRes > stepMax[l]) {
-        		  stepMax[l] = curRes;
-          		stepMaxLoc[l] = r;
-	          }
-    	      stepMean[l] += curRes / totalRanks;
-	        }
+      	      }
+  	          if (r == 0 || curRes > stepMax[l]) {
+          		  stepMax[l] = curRes;
+            		stepMaxLoc[l] = r;
+  	          }
+      	      stepMean[l] += curRes / totalRanks;
+  	        }
       	  // And dump them to as a nicely formatted table.
       	  buf<<"\nMPI Load Imbance\n";
-          buf<<std::setw(6)<<"\t" <<"Step"<<"\t" <<std::setw(10)<<"Avg_Time/s"
-             <<"\t" <<std::setw(10)<<"Min_Time_%"<<"\t"<<std::setw(10)<<"Min_Rank"
-             <<"\t" <<std::setw(10)<<"Max_Time_%"<<"\t"<<std::setw(10)<<"Max_Rank"<<std::endl;
-          for (size_t i = 0; i < laps.size(); i++) {
+            buf<<std::setw(6)<<"\t" <<"Step"<<"\t" <<std::setw(10)<<"Avg_Time/s"
+               <<"\t" <<std::setw(10)<<"Min_Time_%"<<"\t"<<std::setw(10)<<"Min_Rank"
+               <<"\t" <<std::setw(10)<<"Max_Time_%"<<"\t"<<std::setw(10)<<"Max_Rank"<<std::endl;
+            for (size_t i = 0; i < laps.size(); i++) {
       	    buf<<std::setw(6)<<"\t" <<i<<"\t" <<std::setw(10)<<stepMean[i]
- 	             <<"\t"<<std::setw(10)<<100.0*(stepMin[i]/stepMean[i]-1.0)<<"\t"<<std::setw(10)<<stepMinLoc[i]
-               <<"\t"<<std::setw(10)<<100.0*(stepMax[i]/stepMean[i]-1.0)<<"\t"<<std::setw(10)<<stepMaxLoc[i]<<std::endl;
-	        }
-	      }
-#else
-      	std::vector<double> &allResults = laps;
-#endif
+  	             <<"\t"<<std::setw(10)<<100.0*(stepMin[i]/stepMean[i]-1.0)<<"\t"<<std::setw(10)<<stepMinLoc[i]
+                 <<"\t"<<std::setw(10)<<100.0*(stepMax[i]/stepMean[i]-1.0)<<"\t"<<std::setw(10)<<stepMaxLoc[i]<<std::endl;
+  	        }
+  	      }
       	if (rank == 0) {     	  // Followed by the rest of the data.
       	  buf << "\n{" << std::endl;
       	  for (int r = 0; r < totalRanks; r++) {

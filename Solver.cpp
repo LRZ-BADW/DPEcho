@@ -15,27 +15,27 @@
 using namespace sycl;
 
 //-- Derivation from staggered f_{i-ngc:i+ngc-1} to cell-centered hat f_{i}
-SYCL_EXTERNAL field holibDer(int myId, field *var, int stride){
+SYCL_EXTERNAL real holibDer(int myId, real *var, int stride){
   myId+=stride;
 #ifndef FD // Same as FD==2
   return var[myId]-var[myId-stride];
 #elif   FD==2 //-- 2nd order derivation (ngc=1 required)
-  const field d0  = -1.0, d1 = 1.0;
-  const field d[] = {d0, d1};
+  const real d0  = -1.0, d1 = 1.0;
+  const real d[] = {d0, d1};
 #elif   FD==4 //-- 4th order derivation (ngc=2 required)
-  const field d0  = 13.0/12.0, d2 = -1.0/24.;
-  const field d[] = {-d2,d2-d0,d0-d2,d2};
+  const real d0  = 13.0/12.0, d2 = -1.0/24.;
+  const real d[] = {-d2,d2-d0,d0-d2,d2};
 #elif   FD==6 //-- 6th order derivation (ngc=3 required)
-  const field d0 = 1067/960., d2=-29/480., d4=3/640.;
-  const field d[]={-d4,d4-d2,d2-d0,d0-d2,d2-d4,d4};
+  const real d0 = 1067/960., d2=-29/480., d4=3/640.;
+  const real d[]={-d4,d4-d2,d2-d0,d0-d2,d2-d4,d4};
 #endif        // on FD values
-  field  sum=0.0;
+  real  sum=0.0;
   for(int i=0; i<FD;++i){ sum+= d[i] * var[myId+stride*(i-FD/2)];}
   return sum;
 }
 
 //-- Reconstruction Filters
-SYCL_EXTERNAL inline field holibPhi(field r){ //-- rec of echo-mini, may be dropped
+SYCL_EXTERNAL inline real holibPhi(real r){ //-- rec of echo-mini, may be dropped
 #if RECONSTR==NO
   return 0.0;
 #elif RECONSTR==LINEAR
@@ -43,7 +43,7 @@ SYCL_EXTERNAL inline field holibPhi(field r){ //-- rec of echo-mini, may be drop
 #elif RECONSTR==MINMOD
   return sycl::max(0.0, sycl::min(1.0, r)); // minmod
 #elif RECONSTR==MONCEN
-  field tmin = sycl::min(2.0*r, 0.5*(1.0 + r));
+  real tmin = sycl::min(2.0*r, 0.5*(1.0 + r));
   return sycl::max(0.0, sycl::min(tmin, 2.0)); // monotonized central
 #elif RECONSTR==VANLEER
   return (r + sycl::fabs(r))/(1. + sucl::fabs(r));  // van Leer
@@ -52,29 +52,29 @@ SYCL_EXTERNAL inline field holibPhi(field r){ //-- rec of echo-mini, may be drop
 #endif
 }
 
-SYCL_EXTERNAL inline field mm2(field d1, field d2){
+SYCL_EXTERNAL inline real mm2(real d1, real d2){
   return (d1*d2 <=0)? 0.0 : sign(d1) * sycl::fmin(sycl::fabs(d1), sycl::fabs(d2));
 }
 
-SYCL_EXTERNAL inline field mc2(field d1, field d2) {
-  field  coeff = ((d1*d2 <=0)? 0.0 : sign(d1));
+SYCL_EXTERNAL inline real mc2(real d1, real d2) {
+  real  coeff = ((d1*d2 <=0)? 0.0 : sign(d1));
   return coeff * sycl::fmin(2*sycl::fabs(d1), sycl::fmin(2*sycl::fabs(d2), 0.5*sycl::fabs(d1+d2)));
 }
 
-SYCL_EXTERNAL inline field mm4(field d1, field d2, field d3, field d4) {
-  field s1 = sign(d1), s2 = sign(d2), s3 = sign(d3), s4 = sign(d4);
-  field signCalc = (s1+s2)* sycl::fabs((s1 + s3) * (s1 + s4));
+SYCL_EXTERNAL inline real mm4(real d1, real d2, real d3, real d4) {
+  real s1 = sign(d1), s2 = sign(d2), s3 = sign(d3), s4 = sign(d4);
+  real signCalc = (s1+s2)* sycl::fabs((s1 + s3) * (s1 + s4));
 
   return 0.125 * signCalc * sycl::fmin( sycl::fmin(sycl::fabs(d1), sycl::fabs(d2)),
 					  sycl::fmin(sycl::fabs(d3), sycl::fabs(d4)) );
 }
 
-SYCL_EXTERNAL inline field mp5(field f, field f1, field f2, field f3, field f4, field f5) {
+SYCL_EXTERNAL inline real mp5(real f, real f1, real f2, real f3, real f4, real f5) {
 //  See also: Pizzarelli, Marco and Ahn, Myeong-Hwan and Lee, Duck-Joo, 2019
 //    Hybrid Flux Method in Monotonicity-Preserving Scheme for Accurate and Robust Simulation in Supersonic Flow
 //    https://doi.org/10.1155/2019/4590956
-  field ful, fmp, dm, d0, dp, fmd, flc, myfmin, myfmax;
-  field res = f;
+  real ful, fmp, dm, d0, dp, fmd, flc, myfmin, myfmax;
+  real res = f;
 
   ful = f3 + 2 * (f3 - f2);
   fmp = f3 + mm2(f4 - f3, ful - f3);
@@ -93,24 +93,24 @@ SYCL_EXTERNAL inline field mp5(field f, field f1, field f2, field f3, field f4, 
 }
 
 //-- Reconstruction at (i +/- 1/2)
-SYCL_EXTERNAL void holibRec(int myId, field *var, int offset, field *vL, field *vR){
+SYCL_EXTERNAL void holibRec(int myId, real *var, int offset, real *vL, real *vR){
 #if REC_ORDER == 1
-  field  r, a0, a1, a2, a3;
+  real  r, a0, a1, a2, a3;
   a0 = var[myId-offset],   a1 = var[myId];
   a2 = var[myId+offset],   a3 = var[myId+2*offset];
 
   r = (a2 - a3)/(a1 - a2 + 1.e-12);  *vR = a2 + 0.5*(a1-a2) * holibPhi(r); // Together, for cache reuse!
   r = (a1 - a0)/(a2 - a1 + 1.e-12);  *vL = a1 + 0.5*(a2-a1) * holibPhi(r); // rec of echo-mini. May be discarded; it is usable.
 #elif REC_ORDER == 2
-  field fBuf[REC_TOTAL_POINTS];
+  real fBuf[REC_TOTAL_POINTS];
   for (int i = 0; i < REC_TOTAL_POINTS; i++) {
     fBuf[i] = var[myId + offset * (i - REC_LEFT_OFFSET)];
   }
   *vL = fBuf[1] + 0.5 * mm2(fBuf[1] - fBuf[0], fBuf[2] - fBuf[1]);
   *vR = fBuf[2] + 0.5 * mm2(fBuf[2] - fBuf[3], fBuf[1] - fBuf[2]);
 #elif REC_ORDER == 5
-  field fBuf[REC_TOTAL_POINTS], f[2] = {0.0, 0.0};
-  field const d[5] = {3./128., -20./128., 90./128., 60./128., -5./128.};
+  real fBuf[REC_TOTAL_POINTS], f[2] = {0.0, 0.0};
+  real const d[5] = {3./128., -20./128., 90./128., 60./128., -5./128.};
 
   for (int i = 0; i < REC_TOTAL_POINTS; i++)
     fBuf[i] = var[myId + offset * (i - REC_LEFT_OFFSET)];

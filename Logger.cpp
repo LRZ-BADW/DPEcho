@@ -10,9 +10,7 @@
 
 #include "Logger.hpp"
 
-#ifdef MPICODE
 #include <mpi.h>
-#endif
 
 #ifdef VTUNE_API_AVAILABLE
 #include <ittnotify.h>
@@ -34,7 +32,6 @@ FlushMarker const Log::flush;
 void Log::init(std::string logfileName, int coutVerb, int clogVerb) {
   using namespace std::string_literals;
   int rank = 0;
-#ifdef MPICODE
   MPI_Init(nullptr, nullptr);
   rank = mpiRank();
 
@@ -42,9 +39,6 @@ void Log::init(std::string logfileName, int coutVerb, int clogVerb) {
     std::filesystem::create_directories(logfileName);
   }
   MPI_Barrier(MPI_COMM_WORLD);
-#else
-  std::filesystem::create_directories(logfileName);
-#endif
   std::string rankStr = std::to_string(rank); rankStr.insert(0, 8-rankStr.length(), '0');
   logfileName = logfileName + "/"s + rankStr;
   logFile = std::ofstream(logfileName);
@@ -57,9 +51,7 @@ void Log::init(std::string logfileName, int coutVerb, int clogVerb) {
 
 void Log::finalize() {
   Log::cout() << TAG << "Total runtime [s]: "<< runtimeTracker.lap() << Log::endl;
-#ifdef MPICODE
   MPI_Finalize();
-#endif
 }
 
 
@@ -77,11 +69,7 @@ LogStream<std::ofstream>       const Log::clog(int verbosity) {
 void Log::Assert(bool condition, std::string message) {
   if (!condition) {
     Log::cerr(0) << TAG << message << Log::endl;
-#ifdef MPICODE
     MPI_Abort(MPI_COMM_WORLD, 1);
-#else
-    std::abort();
-#endif
   }
 }
 
@@ -93,33 +81,24 @@ const std::string Log::getTag(std::string const val) {
 
 int Log::mpiSize() {
   int totalRanks = 1;
-#ifdef MPICODE
   MPI_Comm_size(MPI_COMM_WORLD,&totalRanks);
-#endif
   return totalRanks;
 };
 
 int Log::mpiRank() {
   int rank = 0;
-#ifdef MPICODE
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-#endif
   return rank;
 };
 
 int Log::mpiRanksPerNode() {
   static int cachedMpiRanksPerNode;
   if (cachedMpiRanksPerNode == 0) {
-#ifdef MPICODE
     int ranksPerNode;
     MPI_Comm nodeComm;
     MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &nodeComm);
     MPI_Comm_size(nodeComm, &ranksPerNode);
     cachedMpiRanksPerNode = ranksPerNode;
-#else
-    cachedMpiRanksPerNode = 1;
-#endif
-
   }
   return cachedMpiRanksPerNode;
 };
@@ -127,9 +106,7 @@ int Log::mpiRanksPerNode() {
 bool Log::isMaster() { return 0 == mpiRank(); };
 
 void Log::barrier(){
-#ifdef MPICODE
   MPI_Barrier(MPI_COMM_WORLD);
-#endif
 }
 
 
@@ -138,9 +115,7 @@ void Log::togglePcontrol(int onOff){
   if(!onOff){ __itt_pause (); }
   else      { __itt_resume(); }
 #endif
-#ifdef MPICODE
   MPI_Pcontrol(onOff);
-#endif
 }
 
 void Log::logo(){

@@ -17,7 +17,6 @@ using namespace sycl;
 
 Domain::~Domain( ){
   free(bufL, qq); free(bufR, qq);
-#ifdef MPICODE
 #if MPICODE != SR_REPLACE
   free(sendBufL, qq); free(sendBufR, qq);
 #endif
@@ -26,26 +25,21 @@ Domain::~Domain( ){
 //  MPI_Request_free(reqSendL);  MPI_Request_free(reqSendR);
 //  MPI_Request_free(reqRecvL);  MPI_Request_free(reqRecvR);
 #endif
-#endif
   Log::cout(4) << TAG << "Domain removed and BCex buffers deallocated." << Log::endl;
 }
 
-#ifdef MPICODE
 #define CART_DEFAULT 0
-#else
-#define CART_DEFAULT 1
-#endif
 
 Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param) {
   int nprocs = Log::mpiSize(), myrank = Log::mpiRank(),  reorder = 0;
   size_t bufMax = std::max({bufSizes[0], bufSizes[1], bufSizes[2]});
   qq = q; // Use the queue to allocate the buffers
-#if defined(MPICODE) && (MPICODE != SR_REPLACE)
-  sendBufL= malloc_shared<field>(FLD_TOT*bufMax, qq); Log::Assert(sendBufL, "Cannot allocate recvBufL.");
-  sendBufR= malloc_shared<field>(FLD_TOT*bufMax, qq); Log::Assert(sendBufR, "Cannot allocate recvBufR.");
+#if (MPICODE != SR_REPLACE)
+  sendBufL= malloc_shared<real>(FLD_TOT*bufMax, qq); Log::Assert(sendBufL, "Cannot allocate recvBufL.");
+  sendBufR= malloc_shared<real>(FLD_TOT*bufMax, qq); Log::Assert(sendBufR, "Cannot allocate recvBufR.");
 #endif
-  bufL= malloc_shared<field>(FLD_TOT*bufMax, qq);     Log::Assert(bufL, "Cannot allocate bufL.");
-  bufR= malloc_shared<field>(FLD_TOT*bufMax, qq);     Log::Assert(bufR, "Cannot allocate bufR.");
+  bufL= malloc_shared<real>(FLD_TOT*bufMax, qq);     Log::Assert(bufL, "Cannot allocate bufL.");
+  bufR= malloc_shared<real>(FLD_TOT*bufMax, qq);     Log::Assert(bufR, "Cannot allocate bufR.");
 
   boxMin_[0] = param.getOr("xMin", -0.5); boxMin_[1] = param.getOr("yMin", -0.5); boxMin_[2] = param.getOr("zMin", -0.5);
   boxMax_[0] = param.getOr("xMax",  0.5); boxMax_[1] = param.getOr("yMax",  0.5); boxMax_[2] = param.getOr("zMax",  0.5);
@@ -54,9 +48,6 @@ Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param) {
 
   for(int iD=0; iD<NDIM; ++iD){ boxSize_[iD] = boxMax_[iD]-boxMin_[iD]; }
 
-#ifndef MPICODE
-  for(int i =0; i <NDIM; ++i ){ isEdgeLeft_[i] = isEdgeRight_[i] = cartDims_[i] = 1; cartCoords_[i] = 0;  }
-#else
   // Create cartesian domain
   int cartPeriodic_[3]={1,1,1}; // MPI is broken and will never accept non-periodic, so we give it to it anyways.
   MPI_Dims_create(nprocs, 3, cartDims_);
@@ -77,19 +68,18 @@ Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param) {
     neighCoords[i] = cartCoords_[i]-1;  MPI_Cart_rank(cartComm_, neighCoords, neighRankPrev_+i);
     neighCoords[i] = cartCoords_[i]+1;  MPI_Cart_rank(cartComm_, neighCoords, neighRankNext_+i);
   }
-#endif
   //-- Initialize phisical (local!) dimensions
   for(unsigned short i=0; i<NDIM; ++i){
     locSize_[i] = boxSize_[i]/cartDims_[i]; locMin_[i] = boxMin_[i]+locSize_[i]*cartCoords_[i]; locMax_[i] = locMin_[i]+locSize_[i];
   }
   Log::clog() << TAG << "Domain created!" << Log::endl;  cartInfo();
 
-#if defined(MPICODE) && (MPICODE == START)
+#if (MPICODE == START)
   for(unsigned short i=0; i<NDIM; ++i){
-    MPI_Send_init(sendBufL,bufSizes[i]*FLD_TOT,MPI_FIELD,neighRankPrev_[i],10,cartComm_,&reqSendL[i]);
-    MPI_Send_init(sendBufR,bufSizes[i]*FLD_TOT,MPI_FIELD,neighRankNext_[i],20,cartComm_,&reqSendR[i]);
-    MPI_Recv_init(    bufL,bufSizes[i]*FLD_TOT,MPI_FIELD,neighRankNext_[i],10,cartComm_,&reqRecvL[i]);
-    MPI_Recv_init(    bufR,bufSizes[i]*FLD_TOT,MPI_FIELD,neighRankPrev_[i],20,cartComm_,&reqRecvR[i]);
+    MPI_Send_init(sendBufL,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankPrev_[i],10,cartComm_,&reqSendL[i]);
+    MPI_Send_init(sendBufR,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankNext_[i],20,cartComm_,&reqSendR[i]);
+    MPI_Recv_init(    bufL,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankNext_[i],10,cartComm_,&reqRecvL[i]);
+    MPI_Recv_init(    bufR,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankPrev_[i],20,cartComm_,&reqRecvR[i]);
   }
 #endif
 
@@ -97,7 +87,6 @@ Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param) {
 
 void Domain::cartInfo() {
   Log::cout(1) << TAG << "3D Domain: "  << cartDims_[0] << " " << cartDims_[1] << " " << cartDims_[2] << Log::endl;
-#ifdef MPICODE
   Log::clog(10) << TAG << "CartPrev: ("  << neighRankPrev_[0] << " " << neighRankPrev_[1] << " "<< neighRankPrev_[2] << ") "
                 << "CartNext: (" << neighRankNext_[0] << " " << neighRankNext_[1] << " " << neighRankNext_[2] << ") " << Log::endl;
   int neighCoords_[3];
@@ -111,9 +100,6 @@ void Domain::cartInfo() {
     Log::clog(10) << "(" << isEdgeLeft_[i]  << "/" << isEdgeRight_[i] <<") ";
     Log::clog(10) << Log::endl;
   }
-#else
-  Log::clog(5) << TAG << "CartCoords:    (" << cartCoords_[0] << " " << cartCoords_[1] << " " << cartCoords_[2] << ")" << Log::endl;
-#endif
 }
 
 void Domain::boxInfo() {
@@ -131,12 +117,10 @@ void Domain::locInfo() {
 // Variables are passed, so any array can be used.
 // ACHTUNG:
 //  - It always assumes periodic, w or w/o MPI. At the end it will take care of other BCs.
-void Domain::BCex(int myDir, Grid gr, field_array &v, int dType){ // gr is the usual local grid.
+void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the usual local grid.
 
-#ifdef MPICODE
   int myRank; MPI_Comm_rank(cartComm_, &myRank);
   MPI_Status  status;
-#endif
   int i0 = (dType==BCEX_VU)?0:1; // Flux is Mx+1 so bcex needs shift
 
   // Each direction may have a different buffer size. We may also store them, whatever.
@@ -146,18 +130,16 @@ void Domain::BCex(int myDir, Grid gr, field_array &v, int dType){ // gr is the u
   nd_range<3> ndr = getMatchingNdRange(rBuf, range<3>(4,4,4));
   Log::clog(8) << TAG << " Filling buffers ..." << Log::endl;
 
-  field *bL = this->bufL, *bR = this->bufR;
-#ifdef MPICODE
+  real *bL = this->bufL, *bR = this->bufR;
 #if MPICODE != SR_REPLACE
   bL = this->sendBufL; bR = this->sendBufR;
 #endif
 #if   MPICODE == ISEND
-  MPI_Irecv(bufL,sBuf*FLD_TOT,MPI_FIELD,neighRankNext_[myDir],10,cartComm_,&reqRecvL[myDir]);
-  MPI_Irecv(bufR,sBuf*FLD_TOT,MPI_FIELD,neighRankPrev_[myDir],20,cartComm_,&reqRecvR[myDir]);
+  MPI_Irecv(bufL,sBuf*FLD_TOT,MPI_REAL,neighRankNext_[myDir],10,cartComm_,&reqRecvL[myDir]);
+  MPI_Irecv(bufR,sBuf*FLD_TOT,MPI_REAL,neighRankPrev_[myDir],20,cartComm_,&reqRecvR[myDir]);
 #elif MPICODE == START
   MPI_Start(&reqRecvL[myDir]);
   MPI_Start(&reqRecvR[myDir]);
-#endif
 #endif
   id<3> nOffRead = range<3>(nOff[0], nOff[1], nOff[2]); nOffRead[myDir] +=i0;
   range<3> const fullGrR(gr.nh[0], gr.nh[1], gr.nh[2]); 
@@ -168,11 +150,11 @@ void Domain::BCex(int myDir, Grid gr, field_array &v, int dType){ // gr is the u
     size_t iVL   = globLinId(id, fullGrR, nOffRead), iVR   = gr.nht -1 -iVL;
     for(int iVar=0; iVar<FLD_TOT; ++iVar){
       bL[iVar*sBuf+iBufL] = v[iVar][iVL];
-#if defined(MPICODE) && ( (MPICODE == ISEND) || (MPICODE == START) )
+#if ( (MPICODE == ISEND) || (MPICODE == START) )
     }
   }).wait_and_throw();
 #if   MPICODE == ISEND
-  MPI_Isend(sendBufL,sBuf*FLD_TOT,MPI_FIELD,neighRankPrev_[myDir],10,cartComm_,&reqSendL[myDir]);
+  MPI_Isend(sendBufL,sBuf*FLD_TOT,MPI_REAL,neighRankPrev_[myDir],10,cartComm_,&reqSendL[myDir]);
 #elif MPICODE == START
   MPI_Start(&reqSendL[myDir]);
 #endif
@@ -185,9 +167,9 @@ void Domain::BCex(int myDir, Grid gr, field_array &v, int dType){ // gr is the u
     }
   }).wait_and_throw();
 
-#ifdef MPICODE //- Middle communication
+//- Middle communication
 #if   MPICODE == ISEND
-  MPI_Isend(sendBufR,sBuf*FLD_TOT,MPI_FIELD,neighRankNext_[myDir],20,cartComm_,&reqSendR[myDir]);
+  MPI_Isend(sendBufR,sBuf*FLD_TOT,MPI_REAL,neighRankNext_[myDir],20,cartComm_,&reqSendR[myDir]);
   MPI_Wait (&reqRecvL[myDir],&status);
 #elif MPICODE == START
   MPI_Start(&reqSendR[myDir]);
@@ -195,19 +177,18 @@ void Domain::BCex(int myDir, Grid gr, field_array &v, int dType){ // gr is the u
 #elif MPICODE == SENDRECV
  Log::clog(8) << TAG << "L MPI_Sendrrecv ... " << Log::endl;
   MPI_Sendrecv(
-    sendBufL,sBuf*FLD_TOT,MPI_FIELD,neighRankPrev_[myDir],10,
-        bufL,sBuf*FLD_TOT,MPI_FIELD,neighRankNext_[myDir],10,
+    sendBufL,sBuf*FLD_TOT,MPI_REAL,neighRankPrev_[myDir],10,
+        bufL,sBuf*FLD_TOT,MPI_REAL,neighRankNext_[myDir],10,
     cartComm_,&status);
   Log::clog(8) << TAG << "R MPI_Sendrrecv ... " << Log::endl;
   MPI_Sendrecv(
-    sendBufR,sBuf*FLD_TOT,MPI_FIELD,neighRankNext_[myDir],20,
-        bufR,sBuf*FLD_TOT,MPI_FIELD,neighRankPrev_[myDir],20,
+    sendBufR,sBuf*FLD_TOT,MPI_REAL,neighRankNext_[myDir],20,
+        bufR,sBuf*FLD_TOT,MPI_REAL,neighRankPrev_[myDir],20,
     cartComm_,&status);
 #elif MPICODE == SR_REPLACE
   Log::clog(8) << TAG << "L+R MPI_Sendrrecv_replace ... " << Log::endl;
-  MPI_Sendrecv_replace(bufL,sBuf*FLD_TOT,MPI_FIELD,neighRankPrev_[myDir],myRank,neighRankNext_[myDir],MPI_ANY_TAG,cartComm_,&status);
-  MPI_Sendrecv_replace(bufR,sBuf*FLD_TOT,MPI_FIELD,neighRankNext_[myDir],myRank,neighRankPrev_[myDir],MPI_ANY_TAG,cartComm_,&status);
-#endif
+  MPI_Sendrecv_replace(bufL,sBuf*FLD_TOT,MPI_REAL,neighRankPrev_[myDir],myRank,neighRankNext_[myDir],MPI_ANY_TAG,cartComm_,&status);
+  MPI_Sendrecv_replace(bufR,sBuf*FLD_TOT,MPI_REAL,neighRankNext_[myDir],myRank,neighRankPrev_[myDir],MPI_ANY_TAG,cartComm_,&status);
 #endif
   Log::clog(8) << TAG << " Recopying from buffers..." << Log::endl;
   nOff[myDir] = 0; // To write, we start from 0
@@ -219,7 +200,7 @@ void Domain::BCex(int myDir, Grid gr, field_array &v, int dType){ // gr is the u
     size_t iBufL = globLinId(id, rBuf, sycl::id<3>(0,0,0)), iBufR = sBuf   -1 -iBufL;  // The same, if we start from the end
     for(int iVar=0; iVar<FLD_TOT; ++iVar){
       v[iVar][iVR] = bL[iVar*sBuf+iBufR];  // ...besides the flipped assignments
-#if defined(MPICODE) && ( (MPICODE == ISEND) || (MPICODE == START) )
+#if ( (MPICODE == ISEND) || (MPICODE == START) )
     }
   }); // NO SYCL wait here!
   MPI_Wait (&reqRecvR[myDir],&status);
@@ -282,7 +263,7 @@ void Domain::BCex(int myDir, Grid gr, field_array &v, int dType){ // gr is the u
     default   : Log::cerr(2) << TAG << "Unknown BC TYPE " << bcType_[myDir] << " along direction " << myDir << ". Proceeding as periodic." << Log::endl;
   }// End switch
 
-#if defined(MPICODE) && ( (MPICODE == ISEND) || (MPICODE == START) )
+#if ( (MPICODE == ISEND) || (MPICODE == START) )
   MPI_Wait(&reqSendL[myDir],&status);
   MPI_Wait(&reqSendR[myDir],&status);
 #endif

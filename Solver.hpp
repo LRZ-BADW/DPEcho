@@ -28,7 +28,7 @@ const float crk2[] = {1.0, 0.25, 2.0/3.0};
 #endif
 
 // Only those called directly outside Solver.cpp needed.
-SYCL_EXTERNAL field holibDer(int myId, field *var, int stride);
-SYCL_EXTERNAL void  holibRec(int myId, field *var, int stride,  field *vL, field *vR); // Reconstructs at i +/- 1/2
+SYCL_EXTERNAL real holibDer(int myId, real *var, int stride);
+SYCL_EXTERNAL void  holibRec(int myId, real *var, int stride,  real *vL, real *vR); // Reconstructs at i +/- 1/2
 
 #endif

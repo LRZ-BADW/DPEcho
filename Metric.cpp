@@ -12,22 +12,22 @@
 #include "echo.hpp"
 
 #if   METRIC == CARTESIAN  // We will put #ifdef for the different metrics (ALL analytic here!)
-SYCL_EXTERNAL field Metric::gDet   (){ return 1.0; }
-SYCL_EXTERNAL field Metric::gDet1  (){ return 1.0; }
-SYCL_EXTERNAL field Metric::alpha  (){ return 1.0; }
-SYCL_EXTERNAL field Metric::betai  (unsigned short i){ return 0;}  // Controvariant beta element of the metric
-SYCL_EXTERNAL field Metric::gCon   (unsigned short i, unsigned short j){ return (i==j) ? 1.0 : 0.0; }
-SYCL_EXTERNAL field Metric::gCov   (unsigned short i, unsigned short j){ return (i==j) ? 1.0 : 0.0; }
-SYCL_EXTERNAL field Metric::dgAlpha(unsigned short i) {  return 0.0; } // Derivatives
-SYCL_EXTERNAL field Metric::dgBeta (unsigned short i, unsigned short j) {  return 0.0; }
-SYCL_EXTERNAL field Metric::dgCov  (unsigned short i, unsigned short j, unsigned short k) { return 0.0; }
+SYCL_EXTERNAL real Metric::gDet   (){ return 1.0; }
+SYCL_EXTERNAL real Metric::gDet1  (){ return 1.0; }
+SYCL_EXTERNAL real Metric::alpha  (){ return 1.0; }
+SYCL_EXTERNAL real Metric::betai  (unsigned short i){ return 0;}  // Controvariant beta element of the metric
+SYCL_EXTERNAL real Metric::gCon   (unsigned short i, unsigned short j){ return (i==j) ? 1.0 : 0.0; }
+SYCL_EXTERNAL real Metric::gCov   (unsigned short i, unsigned short j){ return (i==j) ? 1.0 : 0.0; }
+SYCL_EXTERNAL real Metric::dgAlpha(unsigned short i) {  return 0.0; } // Derivatives
+SYCL_EXTERNAL real Metric::dgBeta (unsigned short i, unsigned short j) {  return 0.0; }
+SYCL_EXTERNAL real Metric::dgCov  (unsigned short i, unsigned short j, unsigned short k) { return 0.0; }
 #elif METRIC == KERR_SCHILD
 // WARNING: Mostly untested!
-SYCL_EXTERNAL field Metric::gDet   (){ return sycl::sqrt(rho2*det*sint2); }
-SYCL_EXTERNAL field Metric::gDet1  (){ return (sint<=1.e-6) ? 0.0 : sycl::rsqrt(rho2*det*sint2) ; }
-SYCL_EXTERNAL field Metric::alpha  (){ return sycl::rsqrt(1.+zz); }
-SYCL_EXTERNAL field Metric::betai  (unsigned short i){ return (0==i) ? (zz/(1.+zz)) : 0.0; }
-SYCL_EXTERNAL field Metric::gCon   (unsigned short i, unsigned short j){
+SYCL_EXTERNAL real Metric::gDet   (){ return sycl::sqrt(rho2*det*sint2); }
+SYCL_EXTERNAL real Metric::gDet1  (){ return (sint<=1.e-6) ? 0.0 : sycl::rsqrt(rho2*det*sint2) ; }
+SYCL_EXTERNAL real Metric::alpha  (){ return sycl::rsqrt(1.+zz); }
+SYCL_EXTERNAL real Metric::betai  (unsigned short i){ return (0==i) ? (zz/(1.+zz)) : 0.0; }
+SYCL_EXTERNAL real Metric::gCon   (unsigned short i, unsigned short j){
   switch(i*10+j){
     case  0: return 1.0 + zz;
     case 11: return rho2;
@@ -36,7 +36,7 @@ SYCL_EXTERNAL field Metric::gCon   (unsigned short i, unsigned short j){
     default: return 0.0;
   }
 }
-SYCL_EXTERNAL field Metric::gCov   (unsigned short i, unsigned short j){
+SYCL_EXTERNAL real Metric::gCov   (unsigned short i, unsigned short j){
   switch(i*10+j){
     case  0: return (sigma/rho2)/det;
     case 11: return    1.0/rho2;
@@ -46,21 +46,21 @@ SYCL_EXTERNAL field Metric::gCov   (unsigned short i, unsigned short j){
   }
 }
 // Derivatives
-SYCL_EXTERNAL field Metric::dgAlpha(unsigned short i) {
+SYCL_EXTERNAL real Metric::dgAlpha(unsigned short i) {
   switch(i){
     case  0: return  alpha()*.5*zz/(1.0+zz)*dxlogzz;
     case  1: return -alpha()*.5*zz/(1.0+zz)*dylogzz;
     default: return  0.0;
   }
 }
-SYCL_EXTERNAL field Metric::dgBeta (unsigned short i, unsigned short j) {
+SYCL_EXTERNAL real Metric::dgBeta (unsigned short i, unsigned short j) {
   switch(i*10+j){
     case  0: return  zz/(1+zz)/(1.+zz)*dxlogzz;
     case  1: return  zz/(1+zz)/(1.+zz)*dylogzz;
     default: return  0.0;
   }
 }
-SYCL_EXTERNAL field Metric::dgCov  (unsigned short i, unsigned short j, unsigned short k) {
+SYCL_EXTERNAL real Metric::dgCov  (unsigned short i, unsigned short j, unsigned short k) {
   switch(i*100+j*10+k){
     case   0: return  zz*dxlogzz; //-- Along r
     case 110: return  gCov(1,1)* dxlogrho2;
@@ -76,33 +76,33 @@ SYCL_EXTERNAL field Metric::dgCov  (unsigned short i, unsigned short j, unsigned
 #endif // METRIC == TYPE
 
 // --- These functions are convenience functions, no modifications should be needed here.
-SYCL_EXTERNAL void   Metric::beta(field bet[3]){   bet[0] = betai(0); bet[1] = betai(1);  bet[2] = betai(2);}
-SYCL_EXTERNAL field  Metric::g3DCon(field g[9]){
+SYCL_EXTERNAL void   Metric::beta(real bet[3]){   bet[0] = betai(0); bet[1] = betai(1);  bet[2] = betai(2);}
+SYCL_EXTERNAL real  Metric::g3DCon(real g[9]){
   for (unsigned int ix = 0; ix < 3; ix++)
     for (unsigned int jx = 0; jx < 3; jx++)
       g[ix+3*jx] = gCon(ix, jx);
   return gDet(); // Determinant
 }
-SYCL_EXTERNAL field Metric::g3DCov(field g[9]){
+SYCL_EXTERNAL real Metric::g3DCov(real g[9]){
   for (unsigned int ix = 0; ix < 3; ix++)
     for (unsigned int jx = 0; jx < 3; jx++)
       g[ix+3*jx] = gCov(ix, jx);
   return 1.0 / gDet();
 }
-SYCL_EXTERNAL void Metric::con2Cov(field vCon[3], field vCov[3]) {
+SYCL_EXTERNAL void Metric::con2Cov(real vCon[3], real vCov[3]) {
   vCov[0] = gCov(0, 0) * vCon[0] + gCov(0, 1) * vCon[1] + gCov(0, 2) * vCon[2];
   vCov[1] = gCov(1, 0) * vCon[0] + gCov(1, 1) * vCon[1] + gCov(1, 2) * vCon[2];
   vCov[2] = gCov(2, 0) * vCon[0] + gCov(2, 1) * vCon[1] + gCov(2, 2) * vCon[2];
 }
-SYCL_EXTERNAL void Metric::cov2Con(field vCov[3], field vCon[3]) {
+SYCL_EXTERNAL void Metric::cov2Con(real vCov[3], real vCon[3]) {
   vCon[0] = gCon(0, 0) * vCov[0] + gCon(0, 1) * vCov[1] + gCon(0, 2) * vCov[2];
   vCon[1] = gCon(1, 0) * vCov[0] + gCon(1, 1) * vCov[1] + gCon(1, 2) * vCov[2];
   vCon[2] = gCon(2, 0) * vCov[0] + gCon(2, 1) * vCov[1] + gCon(2, 2) * vCov[2];
 }
 // FIXME: The following two likely need some corrections... (betaCon? betaCov?)
 // Presumably, they won't be used, so it doesn't matter.
-SYCL_EXTERNAL void Metric::g4DCov(field g[16]){
-  field betaCon[3], betaCov[3];
+SYCL_EXTERNAL void Metric::g4DCov(real g[16]){
+  real betaCon[3], betaCov[3];
   beta(betaCon);
   con2Cov(betaCon, betaCov);
   g[0] = dot(betaCon, betaCov) - alpha();
@@ -113,8 +113,8 @@ SYCL_EXTERNAL void Metric::g4DCov(field g[16]){
     }
   }
 }
-SYCL_EXTERNAL void Metric::g4DCon(field g[16]){
-  field betaCon[3], betaCov[3];
+SYCL_EXTERNAL void Metric::g4DCon(real g[16]){
+  real betaCon[3], betaCov[3];
   beta(betaCon);
   con2Cov(betaCon, betaCov);
   g[0] = dot(betaCon, betaCov) - alpha();

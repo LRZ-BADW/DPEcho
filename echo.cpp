@@ -42,7 +42,7 @@ int main(int argc, char** argv ) {
   unsigned Mx = param.getOr("Mx", 24), My = param.getOr("My", 24), Mz = param.getOr("Mz", 24);
   unsigned Hx = param.getOr("Hx", 24), Hy = param.getOr("Hy", 24), Hz = param.getOr("Hz", 24);
 
-  field bha = param.getOr<field>("bha", 0.4), bhm = param.getOr<field>("bhm", 0.25), bhc =param.getOr<field>("bhc", 0.0);
+  real bha = param.getOr<real>("bha", 0.4), bhm = param.getOr<real>("bhm", 0.25), bhc =param.getOr<real>("bhc", 0.0);
 
   bool dumpHalos = static_cast<bool>(param.getOr("dumpHalos", 0));
 
@@ -73,31 +73,31 @@ int main(int argc, char** argv ) {
 
   // -- Allocations
   int ok = 1;
-  field *out[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){out[i] = malloc_shared<field>(Nout , qDev); ok*=(NULL!=out[i]); } // For ease of custom output
-  field   *v[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  v[i] = malloc_device<field>(Ncell, qDev); ok*=(NULL!=  v[i]); } // Primitives
-  field   *u[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  u[i] = malloc_device<field>(Ncell, qDev); ok*=(NULL!=  u[i]); } // Conserved
-  field  *du[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ du[i] = malloc_device<field>(Ncell, qDev); ok*=(NULL!= du[i]); } // Time Evolution
-  field  *u0[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ u0[i] = malloc_device<field>(Ncell, qDev); ok*=(NULL!= u0[i]); } // RK basis
-  field   *f[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  f[i] = malloc_device<field>(Nflux, qDev); ok*=(NULL!=  f[i]); } // Fluxes
+  real *out[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){out[i] = malloc_shared<real>(Nout , qDev); ok*=(NULL!=out[i]); } // For ease of custom output
+  real   *v[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  v[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!=  v[i]); } // Primitives
+  real   *u[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  u[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!=  u[i]); } // Conserved
+  real  *du[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ du[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!= du[i]); } // Time Evolution
+  real  *u0[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ u0[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!= u0[i]); } // RK basis
+  real   *f[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  f[i] = malloc_device<real>(Nflux, qDev); ok*=(NULL!=  f[i]); } // Fluxes
 #ifdef UCT
-  field *apG[3];  for (int i=0; i<3; ++i){ apG[i] = malloc_device<field>(Nflux, qDev); ok *= (NULL!=apG[i]); } // FWD characteristics (best with CT)
-  field *amG[3];  for (int i=0; i<3; ++i){ amG[i] = malloc_device<field>(Nflux, qDev); ok *= (NULL!=amG[i]); } // BWD characteristics (best with CT)
-  field *vt0[3];  for (int i=0; i<3; ++i){ vt0[i] = malloc_device<field>(Nflux, qDev); ok *= (NULL!=vt0[i]); } // Transverse vel. 0
-  field *vt1[3];  for (int i=0; i<3; ++i){ vt1[i] = malloc_device<field>(Nflux, qDev); ok *= (NULL!=vt1[i]); } // Transverse vel. 1
+  real *apG[3];  for (int i=0; i<3; ++i){ apG[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=apG[i]); } // FWD characteristics (best with CT)
+  real *amG[3];  for (int i=0; i<3; ++i){ amG[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=amG[i]); } // BWD characteristics (best with CT)
+  real *vt0[3];  for (int i=0; i<3; ++i){ vt0[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=vt0[i]); } // Transverse vel. 0
+  real *vt1[3];  for (int i=0; i<3; ++i){ vt1[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=vt1[i]); } // Transverse vel. 1
 #endif
 #ifndef NDEBUG    // For printing arbitrary intermediate values
-  field *debug[FLD_TOT];for (int i=0; i < FLD_TOT; ++i){debug[i] = malloc_shared<field>(Ncell, qDev); ok *= (NULL!=debug[i]); }
+  real *debug[FLD_TOT];for (int i=0; i < FLD_TOT; ++i){debug[i] = malloc_shared<real>(Ncell, qDev); ok *= (NULL!=debug[i]); }
 #endif
   Log::Assert(ok, "Cannot allocate data. Exiting");
 
   //-- Problem
-  field dtLoc; // local copy of time, for ease of capture
+  real dtLoc; // local copy of time, for ease of capture
   Problem problem(qDev, param, &grid, DD, out);
   problem.init(v, u);  // Inits v and u in DEVICE based on param scenario, calls BCex, prints ICs.
 
   //-- SYCL ranges and related accessories
   range<3> rStd  = range(grid.n[0], grid.n[1], grid.n[2]);
-  field   *aMax  = malloc_shared<field>(3, qDev), vChar; // For reduction, and CFL in timestepping
+  real   *aMax  = malloc_shared<real>(3, qDev), vChar; // For reduction, and CFL in timestepping
 
   // Main Evolution loop
   Log::togglePcontrol(1); // start profiling
@@ -108,7 +108,7 @@ int main(int argc, char** argv ) {
 
       for(unsigned myDir=0; myDir<3; myDir++){ // Direction loop
         //range<3> rLoc(gridF[myDir].groupSize[0], gridF[myDir].groupSize[1], gridF[myDir].groupSize[2]);
-        auto maxReduction = sycl::reduction(aMax + myDir, sycl::maximum<field>());
+        auto maxReduction = sycl::reduction(aMax + myDir, sycl::maximum<real>());
 
         //-- Flux kernel (PoV of f[])
         range<3> rFlx = range(gridF[myDir].n[0], gridF[myDir].n[1], gridF[myDir].n[2]); // Fluxes along this direction
@@ -123,25 +123,25 @@ int main(int argc, char** argv ) {
           int vId=globLinId(gid,grid.nh        , vOff), vSt=stride(gid, myDir, grid.nh        ); // Accessing v, u
 
           // What you declare here resides in GPU core-memory - SC
-          field vR[FLD_TOT],vL[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ holibRec(vId,v[i],vSt,vL+i,vR+i); }
+          real vR[FLD_TOT],vL[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ holibRec(vId,v[i],vSt,vL+i,vR+i); }
           Metric g(grid.xC(gid, 0), grid.xC(gid, 1), grid.xC(gid, 2));
-          field uR[FLD_TOT],fR[FLD_TOT],vfR[2],vtR[2];  physicalFlux(myDir, g, vR, uR, fR, vfR, vtR);
-          field uL[FLD_TOT],fL[FLD_TOT],vfL[2],vtL[2];  physicalFlux(myDir, g, vL, uL, fL, vfL, vtL);
-          field ap = sycl::max((field)0., sycl::max( vfL[0], vfR[0]));
-          field am = sycl::max((field)0., sycl::max(-vfL[1],-vfR[1]));
+          real uR[FLD_TOT],fR[FLD_TOT],vfR[2],vtR[2];  physicalFlux(myDir, g, vR, uR, fR, vfR, vtR);
+          real uL[FLD_TOT],fL[FLD_TOT],vfL[2],vtL[2];  physicalFlux(myDir, g, vL, uL, fL, vfL, vtL);
+          real ap = sycl::max((real)0., sycl::max( vfL[0], vfR[0]));
+          real am = sycl::max((real)0., sycl::max(-vfL[1],-vfR[1]));
 #ifdef UCT // For induction we save these too
           apG[myDir][fId] = ap;  vt1[myDir][fId] = (ap*vtL[0]+am*vtR[0])/(ap+am);
           amG[myDir][fId] = am;  vt2[myDir][fId] = (ap*vtL[1]+am*vtR[1])/(ap+am);
 #endif
-          // Fluxes from reconstructed values. When CT is on, this loop leaves B fields out
+          // Fluxes from reconstructed values. When CT is on, this loop leaves B reals out
           for (int i=0; i<FLD_TOT; ++i){ f[i][fId] = (ap*fL[i]+am*fR[i]-ap*am*(uR[i]-uL[i]))/(ap+am); }
 
           // For timestepping; needed only if 0==irk
-          if(!irk){field localMax = sycl::max(ap, am);  max.combine(localMax); }
+          if(!irk){real localMax = sycl::max(ap, am);  max.combine(localMax); }
 
           if (!myDir){ //- Source terms. Do it once per du calculation (TODO: is this right with the RK? check!)
             for (int i=0; i<FLD_TOT; ++i){ du[i][vId] = 0.0; };
-            field src[4]; physicalSource(vId, v, g, src);
+            real src[4]; physicalSource(vId, v, g, src);
             du[VX][vId] =-src[0]; du[VY][vId] =-src[1]; du[VZ][vId] =-src[2]; du[PG][vId] =-src[3];
           }
 
@@ -174,12 +174,10 @@ int main(int argc, char** argv ) {
 
       if (0 == irk){ //- Only at the end of 1st RK step compute the timestep & print time (less MPI barriers)
         problem.lap(); // Store the timestep value before barrier, to estimate load imbalance.
-#ifdef MPICODE
-        MPI_Allreduce(MPI_IN_PLACE, aMax, 3, MPI_FIELD, MPI_MAX, MPI_COMM_WORLD ); // MPI_COMM_WORLD is an epsilon faster than DD->cartComm()
-#endif
+        MPI_Allreduce(MPI_IN_PLACE, aMax, 3, MPI_REAL, MPI_MAX, MPI_COMM_WORLD ); // MPI_COMM_WORLD is an epsilon faster than DD->cartComm()
         vChar=std::max( {aMax[0]/grid.dx[0], aMax[1]/grid.dx[1], aMax[2]/grid.dx[2]} );  // Accumulation
         problem.dtUpdate(vChar); dtLoc = problem.dt(); // Update timing & print it
-        for (int i=0; i<FLD_TOT; ++i) { qDev.memcpy(u0[i], u[i], Ncell*sizeof(field)); } // Store original u: u0 = u
+        for (int i=0; i<FLD_TOT; ++i) { qDev.memcpy(u0[i], u[i], Ncell*sizeof(real)); } // Store original u: u0 = u
         qDev.wait_and_throw();
       }
 
