@@ -24,7 +24,7 @@ using namespace sycl;
 Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, real_array &fld ): config(parFile) {
   grid_ = grid; D_ = D; N_ = grid_->nht;
   iOut_ = 0; iStep_ = 0; nStep_ = config.getOr("nStep", 0);  dumpHalos = static_cast<bool>(config.getOr("dumpHalos", 0)); locSize = config.getOr("locSize", 1);
-  tMax_   = config.getOr<real>("tMax", 1.0); dt_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8/3.0; // Divide by 3 as it's 3D
+  tMax_   = config.getOr<real>("tMax", 1.0); dt_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8 / static_cast<real>(NDIM); // Divide by NDIM dimensions
   qq = qx;
   stepTime_.init();
 
@@ -83,11 +83,11 @@ void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
   stepDir << dir << "/" << std::setw(4) << std::setfill('0') << iOut_;
   std::filesystem::create_directories(stepDir.str());
 
-  int Ncell[3];
-  real brickSize  [3];
-  real brickOrigin[3] = {D_->boxMin (0), D_->boxMin (1), D_->boxMin (2)};
+  int Ncell[NDIM];
+  real brickSize  [NDIM];
+  real brickOrigin[NDIM] = {D_->boxMin (0), D_->boxMin (1), D_->boxMin (2)};
 
-  for(int ii = 0; ii < 3; ++ii){
+  for(int ii = 0; ii < NDIM; ++ii){
     if(dumpHalos){
       Ncell[ii] = gr.nh[ii];
       brickOrigin[ii]*=(1.0*gr.nh[ii])/gr.n[ii];
@@ -146,8 +146,8 @@ void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
   writeBOV(gr, dir, name);
   // MPI: start async .dat writes
   {
-    int Ncell[3], Ntot = 1;
-    for(int ii = 0; ii < 3; ++ii){
+    int Ncell[NDIM], Ntot = 1;
+    for(int ii = 0; ii < NDIM; ++ii){
       if(dumpHalos) Ncell[ii] = gr.nh[ii];
       else          Ncell[ii] = gr.n [ii];
       Ntot *= Ncell[ii];
@@ -174,7 +174,7 @@ void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
 void Problem::InitConstWH(real *v, real val) { // HOST CODE: kernel for initialization.
   Log::Assert(v, "Array was not initialized.");
   qq.parallel_for<class parForInitConstWH>(range<3>(grid_->nh[0], grid_->nh[1], grid_->nh[2]), [=, gr = *(this->grid_)](item<3> it) {
-    int offset[3] = {0,0,0};
+    int offset[NDIM] = {0,0,0};
     auto iV  = globLinId(it, gr.nh, offset); // v has WH indexing; offset by halos
     v[iV] = val;
   });

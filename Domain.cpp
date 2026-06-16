@@ -40,22 +40,22 @@ Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param) {
   for(int iD=0; iD<NDIM; ++iD){ boxSize_[iD] = boxMax_[iD]-boxMin_[iD]; }
 
   // Create cartesian domain
-  int cartPeriodic_[3]={1,1,1}; // MPI is broken and will never accept non-periodic, so we give it to it anyways.
-  MPI_Dims_create(nprocs, 3, cartDims_);
-  MPI_Cart_create(MPI_COMM_WORLD, 3, cartDims_, cartPeriodic_, reorder, &cartComm_);
+  int cartPeriodic_[NDIM]={1,1,1}; // MPI is broken and will never accept non-periodic, so we give it to it anyways.
+  MPI_Dims_create(nprocs, NDIM, cartDims_);
+  MPI_Cart_create(MPI_COMM_WORLD, NDIM, cartDims_, cartPeriodic_, reorder, &cartComm_);
   // Check that domain is consistent
   auto prod = cartDims_[0] * cartDims_[1] * cartDims_[2];
   if ( (prod) && (prod != nprocs) ){
     Log::cerr(0) << TAG << "Aborting. cartDims: " << prod << " don't match MPI ranks :" << nprocs << Log::endl;
     Log::Assert(false, "Terminating.");
   }
-  MPI_Cart_coords(cartComm_, myrank, 3, cartCoords_);
-  int neighCoords[3]; // One of those MPI messy interfaces. Bad code. At least it scales! - SC
+  MPI_Cart_coords(cartComm_, myrank, NDIM, cartCoords_);
+  int neighCoords[NDIM]; // One of those MPI messy interfaces. Bad code. At least it scales! - SC
   //-- Edges and neighbours
-  for(unsigned short i=0; i<3; ++i){
+  for(unsigned short i=0; i<NDIM; ++i){
     isEdgeLeft_ [i]=(              0 == cartCoords_[i])?1:0; // Left  edge.
     isEdgeRight_[i]=((cartDims_[i]-1)== cartCoords_[i])?1:0; // Right edge.
-    for(unsigned short j=0; j<3; ++j){ neighCoords[j] = cartCoords_[j]; } // Reset
+    for(unsigned short j=0; j<NDIM; ++j){ neighCoords[j] = cartCoords_[j]; } // Reset
     neighCoords[i] = cartCoords_[i]-1;  MPI_Cart_rank(cartComm_, neighCoords, neighRankPrev_+i);
     neighCoords[i] = cartCoords_[i]+1;  MPI_Cart_rank(cartComm_, neighCoords, neighRankNext_+i);
   }
@@ -78,13 +78,13 @@ void Domain::cartInfo() {
   Log::cout(1) << TAG << "3D Domain: "  << cartDims_[0] << " " << cartDims_[1] << " " << cartDims_[2] << Log::endl;
   Log::clog(10) << TAG << "CartPrev: ("  << neighRankPrev_[0] << " " << neighRankPrev_[1] << " "<< neighRankPrev_[2] << ") "
                 << "CartNext: (" << neighRankNext_[0] << " " << neighRankNext_[1] << " " << neighRankNext_[2] << ") " << Log::endl;
-  int neighCoords_[3];
-  for (int i = 0; i < 3; ++i){
+  int neighCoords_[NDIM];
+  for (int i = 0; i < NDIM; ++i){
     Log::clog(10) << TAG << "Prev / This / Next / Edge(l/r) [dir #" << i << "]" ;
-    MPI_Cart_coords(cartComm_, neighRankPrev_[i], 3, neighCoords_);
+    MPI_Cart_coords(cartComm_, neighRankPrev_[i], NDIM, neighCoords_);
     Log::clog(10) << "(" << neighCoords_[0] << " " << neighCoords_[1] << " " << neighCoords_[2] << ") ";
     Log::clog(10) << "(" << cartCoords_[0]  << " " << cartCoords_[1]  << " " << cartCoords_[2]  << ") ";
-    MPI_Cart_coords(cartComm_, neighRankNext_[i], 3, neighCoords_);
+    MPI_Cart_coords(cartComm_, neighRankNext_[i], NDIM, neighCoords_);
     Log::clog(10) << "(" << neighCoords_[0] << " " << neighCoords_[1] << " " << neighCoords_[2] <<") ";
     Log::clog(10) << "(" << isEdgeLeft_[i]  << "/" << isEdgeRight_[i] <<") ";
     Log::clog(10) << Log::endl;

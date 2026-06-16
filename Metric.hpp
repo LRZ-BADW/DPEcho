@@ -20,7 +20,7 @@
 
 class Metric {
   private:
-    [[maybe_unused]] real x[3];
+    [[maybe_unused]] real x[NDIM]; // Spatial coordinates
 
   public:
     Metric (real x0, real x1, real x2) : x{x0, x1, x2 } {} // Initialize x directly upon construction. Theory: not doing so causes issues with computations below.
@@ -62,11 +62,11 @@ class Metric {
     // END These functions are expected to be user-provided.
 
     // --- These functions are convenience functions, no modifications should be needed here.
-    SYCL_EXTERNAL void  beta  (real bet[3]);
+    SYCL_EXTERNAL void  beta  (real bet[NDIM]);
     SYCL_EXTERNAL real g3DCon(real g[9]);
     SYCL_EXTERNAL real g3DCov(real g[9]);
-    SYCL_EXTERNAL void con2Cov(real vCon[3], real vCov[3]);
-    SYCL_EXTERNAL void cov2Con(real vCov[3], real vCon[3]);
+    SYCL_EXTERNAL void con2Cov(real vCon[3], real vCov[3]); // Spatial 3-vectors (fixed for physics)
+    SYCL_EXTERNAL void cov2Con(real vCov[3], real vCon[3]); // Spatial 3-vectors (fixed for physics)
     // Maybe not needed?
     SYCL_EXTERNAL void  g4DCon(real g[16]);
     SYCL_EXTERNAL void  g4DCov(real g[16]);

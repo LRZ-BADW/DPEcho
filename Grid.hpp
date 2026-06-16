@@ -21,8 +21,8 @@
 class Grid {
 
   public: // All numbers of points along the 3 directions
-    const int n[3], h[3], nh[3], nt, nht;
-    const real xMin[3], xMax[3], dx[3], hMin[3], hMax[3];  // Physical point distances
+    const int n[NDIM], h[NDIM], nh[NDIM], nt, nht;
+    const real xMin[NDIM], xMax[NDIM], dx[NDIM], hMin[NDIM], hMax[NDIM];  // Physical point distances
 
     Grid(int, int, int, int, int, int, real, real, real, real, real, real);
 

@@ -76,7 +76,7 @@ SYCL_EXTERNAL real Metric::dgCov  (unsigned short i, unsigned short j, unsigned 
 #endif // METRIC == TYPE
 
 // --- These functions are convenience functions, no modifications should be needed here.
-SYCL_EXTERNAL void   Metric::beta(real bet[3]){   bet[0] = betai(0); bet[1] = betai(1);  bet[2] = betai(2);}
+SYCL_EXTERNAL void   Metric::beta(real bet[NDIM]){   bet[0] = betai(0); bet[1] = betai(1);  bet[2] = betai(2);}
 SYCL_EXTERNAL real  Metric::g3DCon(real g[9]){
   for (unsigned int ix = 0; ix < 3; ix++)
     for (unsigned int jx = 0; jx < 3; jx++)

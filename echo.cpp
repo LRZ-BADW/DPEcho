@@ -61,13 +61,13 @@ int main(int argc, char** argv ) {
   const size_t wgMax = param.getOr<int>("wgMax", 4); // Safe and performant default, tune at will.
 
   //-- Sizes, Domain, Grids
-  size_t bufSizes[] = {(Mx+2*Hx)*(My+2*Hy)*Hz,(My+2*Hy)*(Mz+2*Hz)*Hx,(Mz+2*Hz)*(Mx+2*Hx)*Hy}; // BCex buffer size for the largest case
+  size_t bufSizes[NDIM]={(Mx+2*Hx)*(My+2*Hy)*Hz,(My+2*Hy)*(Mz+2*Hz)*Hx,(Mz+2*Hz)*(Mx+2*Hx)*Hy}; // BCex buffer size for the largest case
   Domain *DD = new Domain(qDev, bufSizes, param);  DD->boxInfo();  DD->locInfo();
   Grid grid    = Grid(Mx  ,My  ,Mz  ,Hx  ,Hy  ,Hz  , DD->locMin(0),DD->locMax(0), DD->locMin(1),DD->locMax(1), DD->locMin(2),DD->locMax(2));
-  Grid gridF[3]={Grid(Mx+1,My  ,Mz  ,Hx-2,   0,   0, 0.,1., 0.,1., 0.,1.),
+  Grid gridF[NDIM]={Grid(Mx+1,My  ,Mz  ,Hx-2,   0,   0, 0.,1., 0.,1., 0.,1.),
                  Grid(Mx  ,My+1,Mz  ,   0,Hy-2,   0, 0.,1., 0.,1., 0.,1.),
                  Grid(Mx  ,My  ,Mz+1,   0,   0,Hz-2, 0.,1., 0.,1., 0.,1.)};
-  grid.print();  for (int i=0; i<3; ++i){ gridF[i].print();}
+  grid.print();  for (int i=0; i<NDIM; ++i){ gridF[i].print();}
   unsigned Ncell = grid.nht, Nout = dumpHalos ? Ncell : grid.nt; // For comfort
   unsigned Mmax  = std::max({Mx,My,Mz}),  Nflux = Mx*My*Mz/Mmax*(Mmax+1+2*(NGC-1)); // Flux have +1 point
 
@@ -80,10 +80,10 @@ int main(int argc, char** argv ) {
   real  *u0[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ u0[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!= u0[i]); } // RK basis
   real   *f[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  f[i] = malloc_device<real>(Nflux, qDev); ok*=(NULL!=  f[i]); } // Fluxes
 #ifdef UCT
-  real *apG[3];  for (int i=0; i<3; ++i){ apG[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=apG[i]); } // FWD characteristics (best with CT)
-  real *amG[3];  for (int i=0; i<3; ++i){ amG[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=amG[i]); } // BWD characteristics (best with CT)
-  real *vt0[3];  for (int i=0; i<3; ++i){ vt0[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=vt0[i]); } // Transverse vel. 0
-  real *vt1[3];  for (int i=0; i<3; ++i){ vt1[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=vt1[i]); } // Transverse vel. 1
+  real *apG[NDIM];  for (int i=0; i<NDIM; ++i){ apG[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=apG[i]); } // FWD characteristics (best with CT)
+  real *amG[NDIM];  for (int i=0; i<NDIM; ++i){ amG[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=amG[i]); } // BWD characteristics (best with CT)
+  real *vt0[NDIM];  for (int i=0; i<NDIM; ++i){ vt0[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=vt0[i]); } // Transverse vel. 0
+  real *vt1[NDIM];  for (int i=0; i<NDIM; ++i){ vt1[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=vt1[i]); } // Transverse vel. 1
 #endif
 #ifndef NDEBUG    // For printing arbitrary intermediate values
   real *debug[FLD_TOT];for (int i=0; i < FLD_TOT; ++i){debug[i] = malloc_shared<real>(Ncell, qDev); ok *= (NULL!=debug[i]); }
@@ -97,7 +97,7 @@ int main(int argc, char** argv ) {
 
   //-- SYCL ranges and related accessories
   range<3> rStd  = range(grid.n[0], grid.n[1], grid.n[2]);
-  real   *aMax  = malloc_shared<real>(3, qDev), vChar; // For reduction, and CFL in timestepping
+  real *aMax  = malloc_shared<real>(NDIM, qDev), vChar; // For reduction, and CFL in timestepping
 
   // Main Evolution loop
   Log::togglePcontrol(1); // start profiling
@@ -106,7 +106,7 @@ int main(int argc, char** argv ) {
     for (int irk = 0; irk < NRK; irk++){  // RK loop
       if (!irk){ aMax[0]=0.0; aMax[1]=0.0; aMax[2]=0.0; }
 
-      for(unsigned myDir=0; myDir<3; myDir++){ // Direction loop
+      for(unsigned myDir=0; myDir<NDIM; myDir++){ // Direction loop
         //range<3> rLoc(gridF[myDir].groupSize[0], gridF[myDir].groupSize[1], gridF[myDir].groupSize[2]);
         auto maxReduction = sycl::reduction(aMax + myDir, sycl::maximum<real>());
 
@@ -174,7 +174,7 @@ int main(int argc, char** argv ) {
 
       if (0 == irk){ //- Only at the end of 1st RK step compute the timestep & print time (less MPI barriers)
         problem.lap(); // Store the timestep value before barrier, to estimate load imbalance.
-        MPI_Allreduce(MPI_IN_PLACE, aMax, 3, MPI_REAL, MPI_MAX, MPI_COMM_WORLD ); // MPI_COMM_WORLD is an epsilon faster than DD->cartComm()
+        MPI_Allreduce(MPI_IN_PLACE, aMax, NDIM, MPI_REAL, MPI_MAX, MPI_COMM_WORLD ); // MPI_COMM_WORLD is an epsilon faster than DD->cartComm()
         vChar=std::max( {aMax[0]/grid.dx[0], aMax[1]/grid.dx[1], aMax[2]/grid.dx[2]} );  // Accumulation
         problem.dtUpdate(vChar); dtLoc = problem.dt(); // Update timing & print it
         for (int i=0; i<FLD_TOT; ++i) { qDev.memcpy(u0[i], u[i], Ncell*sizeof(real)); } // Store original u: u0 = u
@@ -192,7 +192,7 @@ int main(int argc, char** argv ) {
         cons2prim(myId, Ncell, u, v, g);
       }).wait_and_throw();
 
-      for(unsigned myDir=0; myDir<3; myDir++) { DD->BCex(myDir, grid, v); }
+      for(unsigned myDir=0; myDir<NDIM; myDir++) { DD->BCex(myDir, grid, v); }
 
     }//-- END RK
 
@@ -219,10 +219,10 @@ int main(int argc, char** argv ) {
   for (int i=0; i < FLD_TOT; ++i){ free(  f[i], qDev); }
   for (int i=0; i < FLD_TOT; ++i){ free( du[i], qDev); }
 #ifdef UCT
-  for (int i=0; i < 3; ++i){ free(  apG[i], qDev); }
-  for (int i=0; i < 3; ++i){ free(amGdu[i], qDev); }
-  for (int i=0; i < 3; ++i){ free(  vt1[i], qDev); }
-  for (int i=0; i < 3; ++i){ free(  vt2[i], qDev); }
+  for (int i=0; i < NDIM; ++i){ free(  apG[i], qDev); }
+  for (int i=0; i < NDIM; ++i){ free(amGdu[i], qDev); }
+  for (int i=0; i < NDIM; ++i){ free(  vt1[i], qDev); }
+  for (int i=0; i < NDIM; ++i){ free(  vt2[i], qDev); }
 #endif
 #ifndef NDEBUG
   for (int i=0; i < FLD_TOT; ++i){ free(debug[i], qDev); }

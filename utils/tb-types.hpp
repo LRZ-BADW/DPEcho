@@ -28,8 +28,8 @@ constexpr const char* FIELD_FORMAT = "DOUBLE";
 #endif
 
 
-typedef real coord[3];
-typedef unsigned int icoord[3];
+typedef real coord[NDIM];
+typedef unsigned int icoord[NDIM];
 
 using real_array = real *const[FLD_TOT];
 
