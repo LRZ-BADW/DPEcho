@@ -24,7 +24,6 @@ add_executable (dpecho
 set_target_properties(dpecho PROPERTIES OUTPUT_NAME "dpecho")
 set_property(TARGET dpecho PROPERTY CXX_STANDARD 17)
 target_include_directories(dpecho PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
-target_compile_definitions(dpecho PRIVATE MDSPAN_IMPL_STANDARD_NAMESPACE=std)
 
 # Add a folder for CMake modules... (e.g. to find external libraries)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
@@ -169,11 +168,6 @@ if(UCT)
   target_compile_definitions(dpecho PRIVATE CT)
 endif()
 
-set(FILE_IO_VALUES VISIT_BOV DISABLED)
-set(FILE_IO DISABLED CACHE STRING "Type of File IO")
-set_property(CACHE FILE_IO PROPERTY STRINGS ${FILE_IO_VALUES})
-message(STATUS "File IO is set to: ${FILE_IO}")
-target_compile_definitions(dpecho PUBLIC FILE_IO_${FILE_IO})
 
 set(METRIC_VALUES CARTESIAN KERR_SCHILD)
 set(METRIC CARTESIAN CACHE STRING "Type of metric used for the simulation.")

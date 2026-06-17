@@ -23,7 +23,7 @@ using namespace sycl;
 
 Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, real_array &fld ): config(parFile) {
   grid_ = grid; D_ = D; N_ = grid_->nht;
-  iOut_ = 0; iStep_ = 0; nStep_ = config.getOr("nStep", 0);  dumpHalos = static_cast<bool>(config.getOr("dumpHalos", 0)); locSize = config.getOr("locSize", 1);
+  iOut_ = 0; iStep_ = 0; nStep_ = config.getOr("nStep", 0);  dumpHalos = static_cast<bool>(config.getOr("dumpHalos", 0)); locSize = config.getOr("locSize", 1); fileIO_ = static_cast<bool>(config.getOr("fileIO", 1));
   tMax_   = config.getOr<real>("tMax", 1.0); dt_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8 / static_cast<real>(NDIM); // Divide by NDIM dimensions
   qq = qx;
   stepTime_.init();
@@ -127,47 +127,43 @@ void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
 }
 
 void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
-#if defined(FILE_IO_VISIT_BOV)
-  waitOut();
-  // Device code: update *out with provided real
-  if(dumpHalos){
-    for(int iVar=0; iVar<FLD_TOT; ++iVar) qq.memcpy(out[iVar], v[iVar], gr.nht*sizeof(real)); // Direct memcpy
-  } else {  // Manual indexing necessary
-    real *outt[FLD_TOT]; for (int i = 0; i < FLD_TOT; i++) outt[i] = out[i];
-    qq.parallel_for<class parForDump>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
-      auto iOut= it.get_linear_id(); // Output array has NH halo scope here
-      auto iV  = globLinId(it.get_id(), gr.nh, gr.h); // v has WH indexing; offset by halos
-      for(int iVar=0; iVar<FLD_TOT; ++iVar)
-        outt[iVar][iOut] = v[iVar][iV];
-    });
-  }
-  qq.wait_and_throw();
-  // Host code: .bov headers
-  writeBOV(gr, dir, name);
-  // MPI: start async .dat writes
-  {
-    int Ncell[NDIM], Ntot = 1;
-    for(int ii = 0; ii < NDIM; ++ii){
-      if(dumpHalos) Ncell[ii] = gr.nh[ii];
-      else          Ncell[ii] = gr.n [ii];
-      Ntot *= Ncell[ii];
+  if (fileIO_) {
+    waitOut();
+    // Device code: update *out with provided real
+    if(dumpHalos){
+      for(int iVar=0; iVar<FLD_TOT; ++iVar) qq.memcpy(out[iVar], v[iVar], gr.nht*sizeof(real)); // Direct memcpy
+    } else {  // Manual indexing necessary
+      real *outt[FLD_TOT]; for (int i = 0; i < FLD_TOT; i++) outt[i] = out[i];
+      qq.parallel_for<class parForDump>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
+        auto iOut= it.get_linear_id(); // Output array has NH halo scope here
+        auto iV  = globLinId(it.get_id(), gr.nh, gr.h); // v has WH indexing; offset by halos
+        for(int iVar=0; iVar<FLD_TOT; ++iVar)
+          outt[iVar][iOut] = v[iVar][iV];
+      });
     }
-    for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
-      std::ostringstream datName;
-      datName << dir << "/" << std::setw(4) << std::setfill('0') << iOut_
-              << "/" << name << "_" << varLabel[iVar] << "_"
-              << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
-      MPI_File_open(MPI_COMM_SELF, datName.str().c_str(),
-                    MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &out_fh[iVar]);
-      MPI_File_iwrite(out_fh[iVar], out[iVar], Ntot, MPI_REAL, &out_req[iVar]);
+    qq.wait_and_throw();
+    // Host code: .bov headers
+    writeBOV(gr, dir, name);
+    // MPI: start async .dat writes
+    {
+      int Ncell[NDIM], Ntot = 1;
+      for(int ii = 0; ii < NDIM; ++ii){
+        if(dumpHalos) Ncell[ii] = gr.nh[ii];
+        else          Ncell[ii] = gr.n [ii];
+        Ntot *= Ncell[ii];
+      }
+      for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
+        std::ostringstream datName;
+        datName << dir << "/" << std::setw(4) << std::setfill('0') << iOut_
+                << "/" << name << "_" << varLabel[iVar] << "_"
+                << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
+        MPI_File_open(MPI_COMM_SELF, datName.str().c_str(),
+                      MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &out_fh[iVar]);
+        MPI_File_iwrite(out_fh[iVar], out[iVar], Ntot, MPI_REAL, &out_req[iVar]);
+      }
+      out_pending = true;
     }
-    out_pending = true;
   }
-#elif defined(FILE_IO_DISABLED)
-  // Do nothing.
-#else
-#warning "FILE_IO variable is not valid"
-#endif
   iOut_++;
 }
 

@@ -24,7 +24,7 @@ class Problem {
 
   public:
     int locSize;
-    bool dumpHalos;
+    bool fileIO_, dumpHalos;
     real *out[FLD_TOT]; // Just to print
 
     Problem(sycl::queue q, Parameters &param, Grid *g, Domain *f, real_array &out);

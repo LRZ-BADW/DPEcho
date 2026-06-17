@@ -110,8 +110,9 @@ void Domain::locInfo() {
 //  - It always assumes periodic, w or w/o MPI. At the end it will take care of other BCs.
 void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the usual local grid.
 
-  using dex3 = std::dextents<size_t, 3>;
-  using dex4 = std::dextents<size_t, 4>;
+  namespace ms = std::experimental;
+  using dex3 = ms::dextents<size_t, 3>;
+  using dex4 = ms::dextents<size_t, 4>;
 
   MPI_Status  status;
   int i0 = (dType==BCEX_VU)?0:1; // Flux is Mx+1 so bcex needs shift
@@ -123,25 +124,25 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
   Log::clog(8) << TAG << " Filling buffers ..." << Log::endl;
 
   //-- Wrap each field as a 3D mdspan over the full WH grid
-  std::mdspan<real, dex3> v_ms[FLD_TOT];
+  ms::mdspan<real, dex3> v_ms[FLD_TOT];
   for (int f = 0; f < FLD_TOT; ++f)
-    v_ms[f] = std::mdspan<real, dex3>(v[f], gr.nh[0], gr.nh[1], gr.nh[2]);
+    v_ms[f] = ms::mdspan<real, dex3>(v[f], gr.nh[0], gr.nh[1], gr.nh[2]);
 
   //-- Helper: wrap a flat buffer as 4D mdspan (FLD_TOT × slab extents)
   auto buf4d = [](real* raw, size_t e0, size_t e1, size_t e2) {
-    return std::mdspan<real, dex4>(raw, FLD_TOT, e0, e1, e2);
+    return ms::mdspan<real, dex4>(raw, FLD_TOT, e0, e1, e2);
   };
 
   //-- Submdspan helpers for the 4 slabs (safe + reconstruct layout_right)
-  auto full_ext = std::full_extent;
+  auto full_ext = ms::full_extent;
   using pair = std::pair<size_t, size_t>;
 
   int h  = gr.h[myDir];
   int nhd = gr.nh[myDir];
 
-  auto safe_sub = [&](std::mdspan<real, dex3> const& f, pair p0, pair p1, pair p2) {
-    auto sub = std::submdspan(f, p0, p1, p2);
-    return std::mdspan<real, dex3>(sub.data_handle(), sub.extents());
+  auto safe_sub = [&](ms::mdspan<real, dex3> const& f, pair p0, pair p1, pair p2) {
+    auto sub = ms::submdspan(f, p0, p1, p2);
+    return ms::mdspan<real, dex3>(sub.data_handle(), sub.extents());
   };
 
   // Grid coordinate at forward iteration (i, j, k) ∈ nBuf[0..2]
