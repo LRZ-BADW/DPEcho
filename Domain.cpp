@@ -216,23 +216,32 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
     for (int f = 0; f < FLD_TOT; ++f)
       v_ms[f](p[0], p[1], p[2]) = bR4(f, id[0], id[1], id[2]);
   }).wait_and_throw();
-  nOff[myDir] = 0; // BCOF sections below use nOff with flat indexing
   switch(bcType_[myDir]){ //-- PROCESSING BC TYPEs
     case BCOF0: //- Outflow w. 0th order interp
       Log::clog(10) << TAG << " Processing Outflow BCs of order 0..." << Log::endl;
       if(isEdgeLeft_[myDir]){
-        qq.parallel_for(rBuf,[=](item<3> it){  // v -> WHindex
-          id<3> readId, writeId = readId = it.get_id()  ;  readId[myDir]+= gr.h[myDir] - it.get_id(myDir);
-          int iVL = globLinId(writeId, gr.nh, nOff)     ,           iOut = globLinId(readId, gr.nh, nOff);
-          for(int iVar=0; iVar<FLD_TOT; ++iVar){ v[iVar][iVL] = v[iVar][iOut]; };
+        int srcPos = gr.h[myDir] + i0;
+        qq.parallel_for(r3, [=](item<3> it) {
+          auto id = it.get_id();
+          for (int f = 0; f < FLD_TOT; ++f)
+            switch (myDir) {
+              case 0: v_ms[f](id[0], id[1], id[2]) = v_ms[f](srcPos, id[1], id[2]); break;
+              case 1: v_ms[f](id[0], id[1], id[2]) = v_ms[f](id[0], srcPos, id[2]); break;
+              case 2: v_ms[f](id[0], id[1], id[2]) = v_ms[f](id[0], id[1], srcPos); break;
+            }
         }).wait_and_throw();
       }
       if(isEdgeRight_[myDir]){
-        qq.parallel_for(rBuf,[=](item<3> it){  // v -> WHindex
-          id<3> gridOffset = id(0,0,0)                             ; gridOffset[myDir] =   gr.n[myDir] + gr.h[myDir];
-          id<3> readId, writeId = readId = it.get_id() + gridOffset;     readId[myDir] = readId[myDir] - it.get_id(myDir) - 1;
-          int       iVR = globLinId(writeId, gr.nh, nOff)  ,                      iOut = globLinId(readId, gr.nh, nOff);
-          for(int iVar=0; iVar<FLD_TOT; ++iVar){ v[iVar][iVR] = v[iVar][iOut]; };
+        int base = gr.nh[myDir] - gr.h[myDir];
+        int srcPos = base - 1;
+        qq.parallel_for(r3, [=](item<3> it) {
+          auto id = it.get_id();
+          for (int f = 0; f < FLD_TOT; ++f)
+            switch (myDir) {
+              case 0: v_ms[f](base+id[0], id[1], id[2]) = v_ms[f](srcPos, id[1], id[2]); break;
+              case 1: v_ms[f](id[0], base+id[1], id[2]) = v_ms[f](id[0], srcPos, id[2]); break;
+              case 2: v_ms[f](id[0], id[1], base+id[2]) = v_ms[f](id[0], id[1], srcPos); break;
+            }
         }).wait_and_throw();
       }
       break;
