@@ -13,6 +13,8 @@
 #include "Parameters.hpp"
 #include "Logger.hpp"
 
+#include <mdspan.hpp>
+
 using namespace sycl;
 
 Domain::~Domain( ){
@@ -108,62 +110,112 @@ void Domain::locInfo() {
 //  - It always assumes periodic, w or w/o MPI. At the end it will take care of other BCs.
 void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the usual local grid.
 
+  using dex3 = std::dextents<size_t, 3>;
+  using dex4 = std::dextents<size_t, 4>;
+
   MPI_Status  status;
   int i0 = (dType==BCEX_VU)?0:1; // Flux is Mx+1 so bcex needs shift
 
-  // Each direction may have a different buffer size. We may also store them, whatever.
-  int   nBuf[]=      {gr.nh[0], gr.nh[1], gr.nh[2]}; nBuf[myDir] = gr.h[myDir];
-  int   nOff[]=      {       0,        0,        0}; nOff[myDir] = gr.h[myDir];
-  range rBuf  = range( nBuf[0],  nBuf[1],  nBuf[2]); auto   sBuf = rBuf.size(); auto rPlane=rBuf; // rPlane is for BCOF3
-  nd_range<3> ndr = getMatchingNdRange(rBuf, range<3>(4,4,4));
+  int   nBuf[] = {gr.nh[0], gr.nh[1], gr.nh[2]}; nBuf[myDir] = gr.h[myDir];
+  int   nOff[] = {       0,        0,        0}; nOff[myDir] = gr.h[myDir];
+  range<3> rBuf(nBuf[0], nBuf[1], nBuf[2]);
+  auto   rPlane=rBuf; // rPlane is for BCOF3
   Log::clog(8) << TAG << " Filling buffers ..." << Log::endl;
 
-  real *bL = this->sendBufL, *bR = this->sendBufR;
+  //-- Wrap each field as a 3D mdspan over the full WH grid
+  std::mdspan<real, dex3> v_ms[FLD_TOT];
+  for (int f = 0; f < FLD_TOT; ++f)
+    v_ms[f] = std::mdspan<real, dex3>(v[f], gr.nh[0], gr.nh[1], gr.nh[2]);
+
+  //-- Helper: wrap a flat buffer as 4D mdspan (FLD_TOT × slab extents)
+  auto buf4d = [](real* raw, size_t e0, size_t e1, size_t e2) {
+    return std::mdspan<real, dex4>(raw, FLD_TOT, e0, e1, e2);
+  };
+
+  //-- Submdspan helpers for the 4 slabs (safe + reconstruct layout_right)
+  auto full_ext = std::full_extent;
+  using pair = std::pair<size_t, size_t>;
+
+  int h  = gr.h[myDir];
+  int nhd = gr.nh[myDir];
+
+  auto safe_sub = [&](std::mdspan<real, dex3> const& f, pair p0, pair p1, pair p2) {
+    auto sub = std::submdspan(f, p0, p1, p2);
+    return std::mdspan<real, dex3>(sub.data_handle(), sub.extents());
+  };
+
+  // Grid coordinate at forward iteration (i, j, k) ∈ nBuf[0..2]
+  // operation: 0=left_send, 1=right_send, 2=left_recv, 3=right_recv
+  auto grid_pos = [=](int op, int id0, int id1, int id2) -> std::array<size_t, 3> {
+    int idx[] = {id0, id1, id2};
+    int pos[] = {0, 0, 0};
+    for (int d = 0; d < 3; ++d) {
+      if (d == myDir) {
+        switch (op) {
+          case 0: pos[d] = h + i0 + idx[d]; break;  // left send:  first h inner cells
+          case 1: pos[d] = nhd - 2*h - i0 + idx[d]; break; // right send: last h inner cells
+          case 2: pos[d] = idx[d]; break;             // left recv:  left halo
+          case 3: pos[d] = nhd - h + idx[d]; break;  // right recv: right halo
+        }
+      } else {
+        pos[d] = idx[d];
+      }
+    }
+    return {static_cast<size_t>(pos[0]), static_cast<size_t>(pos[1]), static_cast<size_t>(pos[2])};
+  };
+
+  //-- MPI buffer start
   MPI_Start(&reqRecvL[myDir]);
   MPI_Start(&reqRecvR[myDir]);
-  id<3> nOffRead = range<3>(nOff[0], nOff[1], nOff[2]); nOffRead[myDir] +=i0;
-  range<3> const fullGrR(gr.nh[0], gr.nh[1], gr.nh[2]); 
-  qq.parallel_for( ndr, [=](nd_item<3> it){
-    id<3> id = it.get_global_id();
-    if (isOutOfBounds(id, rBuf)) return;
-    size_t iBufL = globLinId(id, rBuf, sycl::id<3>(0,0,0)), iBufR = sBuf   -1 -iBufL; // The same, if we start from the end
-    size_t iVL   = globLinId(id, fullGrR, nOffRead), iVR   = gr.nht -1 -iVL;
-    for(int iVar=0; iVar<FLD_TOT; ++iVar){
-      bL[iVar*sBuf+iBufL] = v[iVar][iVL];
-    }
+
+  // All 4 operations share the same slab extents = nBuf
+  size_t e0 = rBuf[0], e1 = rBuf[1], e2 = rBuf[2];
+  auto r3 = range<3>(e0, e1, e2);
+
+  //-- Pack LEFT send (first h inner cells → sendBufL)
+  auto sbL = buf4d(sendBufL, e0, e1, e2);
+  qq.parallel_for(r3, [=](item<3> it) {
+    auto id = it.get_id();
+    auto p  = grid_pos(0, id[0], id[1], id[2]);
+    for (int f = 0; f < FLD_TOT; ++f)
+      sbL(f, id[0], id[1], id[2]) = v_ms[f](p[0], p[1], p[2]);
   }).wait_and_throw();
   MPI_Start(&reqSendL[myDir]);
-  qq.parallel_for( rBuf, [=](item<3> it){
-    int iBufL = it.get_linear_id()        , iBufR = sBuf   -1 -iBufL;
-    int iVL   = globLinId(it, fullGrR, nOffRead), iVR   = gr.nht -1 -iVL;
-    for(int iVar=0; iVar<FLD_TOT; ++iVar){
-      bR[iVar*sBuf+iBufR] = v[iVar][iVR];
-    }
+
+  //-- Pack RIGHT send (last h inner cells → sendBufR)
+  auto sbR = buf4d(sendBufR, e0, e1, e2);
+  qq.parallel_for(r3, [=](item<3> it) {
+    auto id = it.get_id();
+    auto p  = grid_pos(1, id[0], id[1], id[2]);
+    for (int f = 0; f < FLD_TOT; ++f)
+      sbR(f, id[0], id[1], id[2]) = v_ms[f](p[0], p[1], p[2]);
   }).wait_and_throw();
 
-//- Middle communication
+  //-- Middle communication
   MPI_Start(&reqSendR[myDir]);
-  MPI_Wait (&reqRecvL[myDir],&status);
+  MPI_Wait(&reqRecvL[myDir], &status);
   Log::clog(8) << TAG << " Recopying from buffers..." << Log::endl;
-  nOff[myDir] = 0; // To write, we start from 0
-  id<3> nOffW = range<3>(nOff[0], nOff[1], nOff[2]);
-  qq.parallel_for(ndr,[=,bL=this->bufL](nd_item<3> it){  // v -> WHindex
-    id<3> id = it.get_global_id();
-    if (isOutOfBounds(id, rBuf)) return;
-    size_t iVL   = globLinId(id, fullGrR, nOffW), iVR   = gr.nht -1 -iVL  ;  // For the regular BCEX
-    size_t iBufL = globLinId(id, rBuf, sycl::id<3>(0,0,0)), iBufR = sBuf   -1 -iBufL;  // The same, if we start from the end
-    for(int iVar=0; iVar<FLD_TOT; ++iVar){
-      v[iVar][iVR] = bL[iVar*sBuf+iBufR];  // ...besides the flipped assignments
-    }
-  }); // NO SYCL wait here!
-  MPI_Wait (&reqRecvR[myDir],&status);
-  qq.parallel_for(rBuf,[=,bR=this->bufR](item<3> it){
-    int iVL   = globLinId(it, fullGrR, nOffW), iVR   = gr.nht -1 -iVL;
-    int iBufL = it.get_linear_id()        , iBufR = sBuf   -1 -iBufL;
-    for(int iVar=0; iVar<FLD_TOT; ++iVar){
-      v[iVar][iVL] = bR[iVar*sBuf+iBufL];
-    }
+
+  //-- Unpack RIGHT recv (bufL → right halo)
+  auto bL4 = buf4d(bufL, e0, e1, e2);
+  qq.parallel_for(r3, [=](item<3> it) {
+    auto id = it.get_id();
+    auto p  = grid_pos(3, id[0], id[1], id[2]);
+    for (int f = 0; f < FLD_TOT; ++f)
+      v_ms[f](p[0], p[1], p[2]) = bL4(f, id[0], id[1], id[2]);
+  });
+
+  MPI_Wait(&reqRecvR[myDir], &status);
+
+  //-- Unpack LEFT recv (bufR → left halo)
+  auto bR4 = buf4d(bufR, e0, e1, e2);
+  qq.parallel_for(r3, [=](item<3> it) {
+    auto id = it.get_id();
+    auto p  = grid_pos(2, id[0], id[1], id[2]);
+    for (int f = 0; f < FLD_TOT; ++f)
+      v_ms[f](p[0], p[1], p[2]) = bR4(f, id[0], id[1], id[2]);
   }).wait_and_throw();
+  nOff[myDir] = 0; // BCOF sections below use nOff with flat indexing
   switch(bcType_[myDir]){ //-- PROCESSING BC TYPEs
     case BCOF0: //- Outflow w. 0th order interp
       Log::clog(10) << TAG << " Processing Outflow BCs of order 0..." << Log::endl;
