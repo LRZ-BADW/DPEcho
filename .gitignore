@@ -2,3 +2,6 @@
 *.swo
 /build/
 /.ccls-cache/
+/log/
+/out/
+/runs/
