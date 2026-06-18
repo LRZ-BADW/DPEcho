@@ -51,6 +51,7 @@
 #define GAMMA 1.3333
 #define GAMMA1 4.0 // GAMMA/(GAMMA-1.0)
 #define PGFLOOR 0
+#define RHOFLOOR 1e-12
 #define ISOENTROPIC 0
 
 //-- Physics

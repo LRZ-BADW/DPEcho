@@ -32,7 +32,7 @@ SYCL_EXTERNAL void cons2prim(id<1> myId, unsigned n, real_array u, real_array v,
   real sCov[3]={u[VX][gid]*gDet1,u[VY][gid]*gDet1,u[VZ][gid]*gDet1},  sCon[3];  g.cov2Con(sCov, sCon);  real s2=dot(sCov, sCon);
   real bCon[3]={u[BX][gid]*gDet1,u[BY][gid]*gDet1,u[BZ][gid]*gDet1},  bCov[3];  g.con2Cov(bCon, bCov);  real b2=dot(bCov, bCon);
 
-  real rh = u[RH][gid]*gDet1, et=u[PG][gid]*gDet1, rh1=1./rh, pg = (GAMMA-1.0)*(et-.5*(rh1*s2+b2));
+  real rh = u[RH][gid]*gDet1, et=u[PG][gid]*gDet1, rh1=1./rh, pg = sycl::max((GAMMA-1.0)*(et-.5*(rh1*s2+b2)), (real)PGFLOOR);
   v[RH][gid] = rh;          v[PG][gid] = pg;
   v[VX][gid] = sCon[0]*rh1; v[VY][gid] = sCon[1]*rh1;  v[VZ][gid] = sCon[2]*rh1;
   v[BX][gid] = bCon[0]    ; v[BY][gid] = bCon[1]    ;  v[BZ][gid] = bCon[2]    ;

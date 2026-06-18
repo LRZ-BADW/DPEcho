@@ -52,7 +52,7 @@ SYCL_EXTERNAL void cons2prim(id<1> myId, unsigned n, real_array u, real_array v,
   //-- Undetermined iteration. ALL LOCAL, luckily
   real w, vv2, pg, fw, dv2, dpg, dfw, dw1; const real tol=1.e-9;
   for(unsigned iter=0; iter<20; ++iter){
-    w  = w1+d;  vv2 = w*w*s2+(2.*w+b2)*sb2;   com = w*(w+b2);  u2 = vv2/(com*com-vv2); glf = sycl::sqrt(1.+u2);
+    w  = w1+d;  vv2 = w*w*s2+(2.*w+b2)*sb2;   com = w*(w+b2);  u2 = sycl::max(vv2/(com*com-vv2), (real)0.0); glf = sycl::sqrt(1.+u2);
     pg = (w1-d*u2/(1.+glf))/(GAMMA1*glf*glf); com = w+b2;      fw = w1-et1-pg + .5*(b2 + b2st2/(com*com));
     dv2 = -2.*( s2+sb2* (3.*w*(com)+b2*b2)/(w*w*w) )/ (com*com*com);
     dpg = 1./(GAMMA1*glf*glf) - glf*(.5*d/GAMMA1+glf*pg)*dv2;  dfw = 1.-dpg-b2st2/(com*com*com);  dw1 = -fw/dfw;
@@ -61,6 +61,13 @@ SYCL_EXTERNAL void cons2prim(id<1> myId, unsigned n, real_array u, real_array v,
 
   real rh = d/glf; pg = sycl::max(pg, (real)PGFLOOR);
   real vCon[3]={ (sCon[0]+sb*bCon[0]/w)/(w+b2), (sCon[1]+sb*bCon[1]/w)/(w+b2), (sCon[2]+sb*bCon[2]/w)/(w+b2)};
+
+  // Fallback if Newton solver produced invalid state
+  bool bad = (glf != glf) || (glf < (real)1.0) || (w+b2 <= (real)0) || (w != w) || (w <= (real)0);
+  if (bad) {
+    glf = (real)1.0; rh = d; pg = (real)PGFLOOR;
+    for (int i=0; i<3; ++i) vCon[i] = (sCon[i]==sCon[i] && d>(real)0) ? sCon[i]/d : (real)0;
+  }
 
   v[RH][gid] = rh;          v[PG][gid] = pg;
   v[VX][gid] = vCon[0]*glf; v[VY][gid] = vCon[1]*glf;  v[VZ][gid] = vCon[2]*glf;

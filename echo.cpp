@@ -98,7 +98,6 @@ int main(int argc, char** argv ) {
   //-- SYCL ranges and related accessories
   range<3> rStd  = range(grid.n[0], grid.n[1], grid.n[2]);
   real *aMax  = malloc_shared<real>(NDIM, qDev), vChar; // For reduction, and CFL in timestepping
-
   // Main Evolution loop
   Log::togglePcontrol(1); // start profiling
   while( (problem.t() <= problem.tMax()) && (problem.iStep() < problem.nStep()) ){
@@ -134,15 +133,19 @@ int main(int argc, char** argv ) {
           amG[myDir][fId] = am;  vt2[myDir][fId] = (ap*vtL[1]+am*vtR[1])/(ap+am);
 #endif
           // Fluxes from reconstructed values. When CT is on, this loop leaves B reals out
-          for (int i=0; i<FLD_TOT; ++i){ f[i][fId] = (ap*fL[i]+am*fR[i]-ap*am*(uR[i]-uL[i]))/(ap+am); }
+          real apam = ap + am; if (apam <= 0) { apam = 1e-30; }
+          for (int i=0; i<FLD_TOT; ++i){ real flx = (ap*fL[i]+am*fR[i]-ap*am*(uR[i]-uL[i]))/apam; f[i][fId] = (flx==flx) ? flx : 0; }
 
           // For timestepping; needed only if 0==irk
           if(!irk){real localMax = sycl::max(ap, am);  max.combine(localMax); }
 
-          if (!myDir){ //- Source terms. Do it once per du calculation (TODO: is this right with the RK? check!)
+          if (!myDir){ //- Source terms. Do it once per du calculation
             for (int i=0; i<FLD_TOT; ++i){ du[i][vId] = 0.0; };
             real src[4]; physicalSource(vId, v, g, src);
-            du[VX][vId] =-src[0]; du[VY][vId] =-src[1]; du[VZ][vId] =-src[2]; du[PG][vId] =-src[3];
+            du[VX][vId] = (src[0]==src[0]) ? -src[0] : 0;
+            du[VY][vId] = (src[1]==src[1]) ? -src[1] : 0;
+            du[VZ][vId] = (src[2]==src[2]) ? -src[2] : 0;
+            du[PG][vId] = (src[3]==src[3]) ? -src[3] : 0;
           }
 
 #ifndef NDEBUG  // Variables you may print for debug. set debug:= <whatYouWantToSee>
@@ -188,6 +191,7 @@ int main(int argc, char** argv ) {
         int myId = globLinId(it.get_id(), grid.nh, grid.h ); // Accessing v, u and the like
         for (int i=0; i<FLD_TOT; ++i)
           u[i][myId] = crk1[irk] * u0[i][myId] + crk2[irk]*( u[i][myId] - dtLoc*du[i][myId] );
+        u[RH][myId] = sycl::max(u[RH][myId], (real)RHOFLOOR);
         Metric g(grid.xC(id, 0), grid.xC(id, 1), grid.xC(id, 2));
         cons2prim(myId, Ncell, u, v, g);
       }).wait_and_throw();
@@ -195,7 +199,7 @@ int main(int argc, char** argv ) {
       for(unsigned myDir=0; myDir<NDIM; myDir++) { DD->BCex(myDir, grid, v); }
 
     }//-- END RK
-
+    qDev.wait_and_throw();
     // Log timestep report
     Log::clog(4) << TAG<<"Step# "<< problem.iStep()<<", dump# "<< problem.iOut()-1 << ", characteristic "<< vChar << Log::endl;
 #ifndef NDEBUG

@@ -120,7 +120,6 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
   int   nBuf[] = {gr.nh[0], gr.nh[1], gr.nh[2]}; nBuf[myDir] = gr.h[myDir];
   int   nOff[] = {       0,        0,        0}; nOff[myDir] = gr.h[myDir];
   range<3> rBuf(nBuf[0], nBuf[1], nBuf[2]);
-  auto   rPlane=rBuf; // rPlane is for BCOF3
   Log::clog(8) << TAG << " Filling buffers ..." << Log::endl;
 
   //-- Wrap each field as a 3D mdspan over the full WH grid
@@ -204,7 +203,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
     auto p  = grid_pos(3, id[0], id[1], id[2]);
     for (int f = 0; f < FLD_TOT; ++f)
       v_ms[f](p[0], p[1], p[2]) = bL4(f, id[0], id[1], id[2]);
-  });
+  }).wait_and_throw();
 
   MPI_Wait(&reqRecvR[myDir], &status);
 
@@ -245,31 +244,74 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
         }).wait_and_throw();
       }
       break;
-      // ACHTUNG:: MOST LIKELY INCORRECT!!!!
-    case BCOF3: //- Outflow w. 3rd order interp
+    case BCOF3: //- Outflow w. 3rd order (cubic Lagrange extrapolation)
       Log::clog(10) << TAG << " Processing Outflow BCs of order 3..." << Log::endl;
-      if(isEdgeLeft_[myDir]){
-        for(int iVar=0; iVar<FLD_TOT; ++iVar){
-          qq.parallel_for(rPlane,[=](item<3> it){  // v -> WHindex
-            id<3> myId = it.get_id();
-            int iVL = globLinId(myId, gr.nh, nOff), step = stride(myId, myDir, gr.nh);
-            for(int iLay=0; iLay<gr.h[myDir]; ++iLay){
-               v[iVar][iVL] = -1*v[iVar][iVL+step] -3*v[iVar][iVL+2*step] + v[iVar][iVL+3*step];
-               iVL+=-step;
+      if (isEdgeLeft_[myDir]) {
+        int h = gr.h[myDir];
+        int src0 = h + i0;
+        qq.parallel_for(r3, [=](item<3> it) {
+          auto id = it.get_id();
+          int g = id[myDir];
+          int k = h - g;
+          real c[4];
+          switch (k) {
+            case 1: c[0]=4; c[1]=-6; c[2]=4; c[3]=-1; break;
+            case 2: c[0]=10; c[1]=-20; c[2]=15; c[3]=-4; break;
+            case 3: c[0]=20; c[1]=-45; c[2]=36; c[3]=-10; break;
+            case 4: c[0]=35; c[1]=-84; c[2]=70; c[3]=-20; break;
+          }
+          int p0 = src0, p1 = src0+1, p2 = src0+2, p3 = src0+3;
+          for (int f = 0; f < FLD_TOT; ++f) {
+            real val;
+            switch (myDir) {
+              case 0:
+                val = c[0]*v_ms[f](p0,id[1],id[2]) + c[1]*v_ms[f](p1,id[1],id[2])
+                    + c[2]*v_ms[f](p2,id[1],id[2]) + c[3]*v_ms[f](p3,id[1],id[2]);
+                v_ms[f](g,id[1],id[2]) = val; break;
+              case 1:
+                val = c[0]*v_ms[f](id[0],p0,id[2]) + c[1]*v_ms[f](id[0],p1,id[2])
+                    + c[2]*v_ms[f](id[0],p2,id[2]) + c[3]*v_ms[f](id[0],p3,id[2]);
+                v_ms[f](id[0],g,id[2]) = val; break;
+              case 2:
+                val = c[0]*v_ms[f](id[0],id[1],p0) + c[1]*v_ms[f](id[0],id[1],p1)
+                    + c[2]*v_ms[f](id[0],id[1],p2) + c[3]*v_ms[f](id[0],id[1],p3);
+                v_ms[f](id[0],id[1],g) = val; break;
             }
-          });
-        }; qq.wait_and_throw();
+          }
+        }).wait_and_throw();
       }
-      if(isEdgeRight_[myDir]){
-        qq.parallel_for(rBuf,[=](item<3> it){  // v -> WHindex
-          id<3> gridOffset = id(0,0,0);  gridOffset[myDir] = gr.n[myDir] + gr.h[myDir];
-          id<3> myId = it.get_id() + gridOffset;
-          int iVL = globLinId(myId, gr.nh, nOff), step = stride(myId, myDir, gr.nh);
-          for(int iVar=0; iVar<FLD_TOT; ++iVar){
-          for(int iLay=0; iLay<gr.h[myDir]; ++iLay){
-             v[iVar][iVL] = -1*v[iVar][iVL-step] -3*v[iVar][iVL-2*step] + v[iVar][iVL-3*step];
-             iVL+= step;
-          }}
+      if (isEdgeRight_[myDir]) {
+        int h = gr.h[myDir];
+        int base = gr.nh[myDir] - h;
+        qq.parallel_for(r3, [=](item<3> it) {
+          auto id = it.get_id();
+          int i = id[myDir];
+          int k = i + 1;
+          real c[4];
+          switch (k) {
+            case 1: c[0]=4; c[1]=-6; c[2]=4; c[3]=-1; break;
+            case 2: c[0]=10; c[1]=-20; c[2]=15; c[3]=-4; break;
+            case 3: c[0]=20; c[1]=-45; c[2]=36; c[3]=-10; break;
+            case 4: c[0]=35; c[1]=-84; c[2]=70; c[3]=-20; break;
+          }
+          int p0 = base-1, p1 = base-2, p2 = base-3, p3 = base-4;
+          for (int f = 0; f < FLD_TOT; ++f) {
+            real val;
+            switch (myDir) {
+              case 0:
+                val = c[0]*v_ms[f](p0,id[1],id[2]) + c[1]*v_ms[f](p1,id[1],id[2])
+                    + c[2]*v_ms[f](p2,id[1],id[2]) + c[3]*v_ms[f](p3,id[1],id[2]);
+                v_ms[f](base+i,id[1],id[2]) = val; break;
+              case 1:
+                val = c[0]*v_ms[f](id[0],p0,id[2]) + c[1]*v_ms[f](id[0],p1,id[2])
+                    + c[2]*v_ms[f](id[0],p2,id[2]) + c[3]*v_ms[f](id[0],p3,id[2]);
+                v_ms[f](id[0],base+i,id[2]) = val; break;
+              case 2:
+                val = c[0]*v_ms[f](id[0],id[1],p0) + c[1]*v_ms[f](id[0],id[1],p1)
+                    + c[2]*v_ms[f](id[0],id[1],p2) + c[3]*v_ms[f](id[0],id[1],p3);
+                v_ms[f](id[0],id[1],base+i) = val; break;
+            }
+          }
         }).wait_and_throw();
       }
       break;

@@ -66,6 +66,7 @@ class Problem {
     sycl::queue qq;
     TB::Timer stepTime_;
     real tMax_, t_, dt_, cfl_, tOut_;
+    real *v_[FLD_TOT], *u_[FLD_TOT], dt_prev_;
     unsigned int N_, nxNH_, nyNH_, nzNH_;
     unsigned long BOVRank_; // Necessary as BOV output assumes zyx output order
     unsigned long iOut_, iStep_, nStep_;

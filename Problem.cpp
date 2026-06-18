@@ -24,7 +24,7 @@ using namespace sycl;
 Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, real_array &fld ): config(parFile) {
   grid_ = grid; D_ = D; N_ = grid_->nht;
   iOut_ = 0; iStep_ = 0; nStep_ = config.getOr("nStep", 0);  dumpHalos = static_cast<bool>(config.getOr("dumpHalos", 0)); locSize = config.getOr("locSize", 1); fileIO_ = static_cast<bool>(config.getOr("fileIO", 1));
-  tMax_   = config.getOr<real>("tMax", 1.0); dt_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8 / static_cast<real>(NDIM); // Divide by NDIM dimensions
+  tMax_   = config.getOr<real>("tMax", 1.0); dt_ = 0.0; dt_prev_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8 / static_cast<real>(NDIM); // Divide by NDIM dimensions
   qq = qx;
   stepTime_.init();
 
@@ -44,8 +44,22 @@ Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, rea
 
 //-- Timing and Output (this class has all, useless to make another one)
 void Problem::dtUpdate(real aMax){
-  dt_ = std::min(cfl_/aMax, tOut_*(iOut_+1) -t_ + 1.e-6*tOut_*(iOut_+1));
-  dt_ = std::min(cfl_/aMax, tMax_           -t_ + 1.e-6*tMax_          );
+  dt_ = std::min(cfl_/aMax, tOut_*(iOut_+1)*tMax_ -t_ + 1.e-6*tOut_*(iOut_+1)*tMax_);
+  dt_ = std::min(dt_,       tMax_                   -t_ + 1.e-6*tMax_                );
+
+  if (dt_ < 0) {
+    Log::cout(0) << TAG << "ERROR: negative timestep (dt = " << dt_ << "). Dumping and aborting." << Log::endl;
+    dump(v_); abort();
+  }
+  if (dt_ == 0) {
+    Log::cout(0) << TAG << "dt = 0: steady state reached. Dumping final output." << Log::endl;
+    dump(v_); t_ = tMax_ + 1.0; return;
+  }
+
+  static constexpr real GROWTH_LIMIT = 2.0;
+  if (iStep_ > 0) dt_ = std::min(dt_, dt_prev_ * GROWTH_LIMIT);
+  dt_prev_ = dt_;
+
   t_ += dt_;
   //-- ACHTUNG!! Here and only here we are resetting the step timer!
   double wallT_ = stepTime_.lap(false, true, BOVRank_); stepTime_.init();
@@ -198,6 +212,7 @@ void Problem::init(real_array &v, real_array &u) {
     abort();
   }
   config.report();
+  for (int i = 0; i < FLD_TOT; ++i) { v_[i] = v[i]; u_[i] = u[i]; }
 }
 
 ////-- Problem-specific ICs
