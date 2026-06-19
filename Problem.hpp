@@ -46,7 +46,7 @@ class Problem {
     void dtUpdate(real);
     void dump( real_array &fld, Grid &gr, std::string dir, std::string name);
     void dump( real_array &fld, std::string dir="", std::string name="") {
-      std::string d = dir.empty() ? runName_ + "/out" : runName_ + "/" + dir;
+      std::string d = dir.empty() ? runName_ + "/dump" : runName_ + "/" + dir;
       std::string n = name.empty() ? runName_ : name;
       dump(fld, *(this->grid_), d, n);
     };

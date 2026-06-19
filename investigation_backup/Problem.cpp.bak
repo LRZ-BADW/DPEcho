@@ -21,8 +21,7 @@
 using namespace std;
 using namespace sycl;
 
-Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, real *fld, std::string runName): config(parFile) {
-  runName_ = config.getOr("runName", runName);
+Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, real_array &fld ): config(parFile) {
   grid_ = grid; D_ = D; N_ = grid_->nht;
   iOut_ = 0; iStep_ = 0; nStep_ = config.getOr("nStep", 0);  dumpHalos = static_cast<bool>(config.getOr("dumpHalos", 0)); locSize = config.getOr("locSize", 1); fileIO_ = static_cast<bool>(config.getOr("fileIO", 1));
   tMax_   = config.getOr<real>("tMax", 1.0); dt_ = 0.0; dt_prev_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8 / static_cast<real>(NDIM); // Divide by NDIM dimensions
@@ -33,7 +32,7 @@ Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, rea
   nyNH_ = D_->cartDims(1) * grid_->n[1];
   nzNH_ = D_->cartDims(2) * grid_->n[2];
   Log::Assert(fld != NULL, "Allocate var and assign fld before initializing the problem.");
-  out = fld;
+  for(int iVar=0; iVar<FLD_TOT; ++iVar) out[iVar] = fld[iVar];
   Log::cout(6) << TAG << "Problem framework of size " << N_ << " and output dir created." << Log::endl;
   // Option to chenge the order of BOV output for the various MPI ranks. E.g. a z-first approach is:
   // BOVRank_=D_->cartCoords(2)+( D_->cartCoords(1)+D_->cartCoords(0)*D_->cartDims(1) )*D_->cartDims(2);
@@ -81,174 +80,103 @@ void Problem::dtUpdate(real aMax){
   iStep_++;
 }
 
-void Problem::writeVTKAsync(Grid &gr, std::string dir, std::string name) {
-  Log::Assert(out != nullptr, "Array was not initialized.");
-  if (dumpHalos) return;
+void Problem::waitOut() {
+  if (out_pending) {
+    MPI_Waitall(FLD_TOT, out_req, MPI_STATUSES_IGNORE);
+    for (int i = 0; i < FLD_TOT; ++i) MPI_File_close(&out_fh[i]);
+    out_pending = false;
+  }
+}
 
-  int Ncell[NDIM];
-  for(int ii = 0; ii < NDIM; ++ii)
-    Ncell[ii] = gr.n[ii];
-  int Ntot = Ncell[0] * Ncell[1] * Ncell[2];
-
-  int Gx = nxNH_, Gy = nyNH_, Gz = nzNH_;
-  int Lx = gr.n[0], Ly = gr.n[1], Lz = gr.n[2];
-  int xs = D_->cartCoords(0) * Lx;
-  int ys = D_->cartCoords(1) * Ly;
-  int zs = D_->cartCoords(2) * Lz;
-  int xe = xs + Lx;
-  int ye = ys + Ly;
-  int ze = zs + Lz;
-
-  // Per-variable binary blocks: each = [uint32_t blockSize][Ntot*sizeof(real) data]
-  size_t perVarData = static_cast<size_t>(Ntot) * sizeof(real);
-  uint32_t perVarBlock = static_cast<uint32_t>(perVarData);
-  size_t varBlkBytes = sizeof(uint32_t) + perVarData;
-
-#ifdef SINGLE_PRECISION
-  constexpr const char* VTK_REAL = "Float32";
-#else
-  constexpr const char* VTK_REAL = "Float64";
-#endif
+void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
+  Log::Assert(out[0] != nullptr, "Array was not initialized.");
 
   std::filesystem::create_directories(dir);
+
   std::ostringstream stepDir;
   stepDir << dir << "/" << std::setw(4) << std::setfill('0') << iOut_;
   std::filesystem::create_directories(stepDir.str());
 
-  // XML header with per-variable named DataArrays
-  std::ostringstream hdr;
-  hdr << "<?xml version=\"1.0\"?>\n";
-  hdr << "<VTKFile type=\"ImageData\" version=\"0.1\" byte_order=\"LittleEndian\" header_type=\"UInt32\">\n";
-  hdr << "  <ImageData WholeExtent=\"0 " << Gx << " 0 " << Gy << " 0 " << Gz << "\""
-      << " Origin=\"" << D_->boxMin(0) << " " << D_->boxMin(1) << " " << D_->boxMin(2) << "\""
-      << " Spacing=\"" << gr.dx[0] << " " << gr.dx[1] << " " << gr.dx[2] << "\">\n";
-  hdr << "    <Piece Extent=\"" << xs << " " << xe << " " << ys << " " << ye << " " << zs << " " << ze << "\">\n";
-  hdr << "      <CellData>\n";
-  for (int v = 0; v < FLD_TOT; v++) {
-    size_t off = static_cast<size_t>(v) * varBlkBytes;
-    hdr << "        <DataArray type=\"" << VTK_REAL << "\" Name=\"" << varLabel[v]
-        << "\" format=\"appended\" offset=\"" << off << "\"/>\n";
-  }
-  hdr << "      </CellData>\n";
-  hdr << "    </Piece>\n";
-  hdr << "  </ImageData>\n";
-  hdr << "  <AppendedData encoding=\"raw\">\n";
-  hdr << "    _";
-  std::string header = hdr.str();
+  int Ncell[NDIM];
+  real brickSize  [NDIM];
+  real brickOrigin[NDIM] = {D_->boxMin (0), D_->boxMin (1), D_->boxMin (2)};
 
-  // Pack interleaved out[] into per-variable contiguous blocks
-  size_t binSize = static_cast<size_t>(FLD_TOT) * varBlkBytes;
-  binBuf_ = new char[binSize];
-  for (int v = 0; v < FLD_TOT; v++) {
-    size_t blkOff = static_cast<size_t>(v) * varBlkBytes;
-    *reinterpret_cast<uint32_t*>(binBuf_ + blkOff) = perVarBlock;
-    real *varDst = reinterpret_cast<real*>(binBuf_ + blkOff + sizeof(uint32_t));
-    for (int i = 0; i < Ntot; i++)
-      varDst[i] = out[i * FLD_TOT + v];
+  for(int ii = 0; ii < NDIM; ++ii){
+    if(dumpHalos){
+      Ncell[ii] = gr.nh[ii];
+      brickOrigin[ii]*=(1.0*gr.nh[ii])/gr.n[ii];
+    } else {
+      Ncell[ii] = gr.n[ii];
+    }
+    brickSize[ii] = Ncell[ii] * D_->cartDims(ii) * gr.dx[ii];
   }
 
-  // Open .vti, write header sync, start async write of packed binary
-  std::ostringstream vtiName;
-  vtiName << stepDir.str() << "/rank_"
-          << std::setw(4) << std::setfill('0') << BOVRank_ << ".vti";
-  MPI_File_open(MPI_COMM_SELF, vtiName.str().c_str(),
-                MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &outFh);
-  MPI_File_write(outFh, header.data(), header.size(), MPI_BYTE, MPI_STATUS_IGNORE);
-  MPI_File_iwrite(outFh, binBuf_, binSize, MPI_BYTE, &outReq);
-  outPending = true;
+  for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
+
+    if (Log::isMaster()) {
+      std::ostringstream bovName;
+      bovName << dir << "/" << varLabel[iVar] << "_"
+              << std::setw(4) << std::setfill('0') << iOut_ << ".bov";
+      ofstream bov; bov.open(bovName.str(), ios_base::out);
+      bov << "TIME: " << t() << "\n";
+      bov << "DATA_FILE: " << std::setw(4) << std::setfill('0') << iOut_
+          << "/" << name << "_" << varLabel[iVar] << "_%04d.dat\n";
+      bov << "DATA_SIZE: " << Ncell[2] * D_->cartDims(2) << " "
+          << Ncell[1] * D_->cartDims(1) << " "
+          << Ncell[0] * D_->cartDims(0) << "\n";
+      bov << "DATA_FORMAT: " << FIELD_FORMAT << "\n";
+      bov << "VARIABLE: v\n";
+      bov << "DATA_ENDIAN: LITTLE\n";
+      bov << "CENTERING: zonal\n";
+      bov << "BRICK_ORIGIN: " << brickOrigin[2] << " " << brickOrigin[1] << " " << brickOrigin[0] << "\n";
+      bov << "BRICK_SIZE: "  << brickSize[2]  << " " << brickSize[1]  << " " << brickSize[0]  << "\n";
+      bov << "DIVIDE_BRICK: false\n";
+      bov << "DATA_BRICKLETS: " << Ncell[2] << " " << Ncell[1] << " " << Ncell[0] << "\n";
+      bov << "DATA_COMPONENTS: 1\n";
+      bov << std::flush; bov.close();
+    }
+  }
 
   Log::cout(0) << TAG << "Dumped " << dir << " (" << name << ") output #" << iOut_ << Log::endl;
-}
-
-void Problem::writePVTI(std::string dir, std::string name, unsigned long out) {
-  int Lx = grid_->n[0], Ly = grid_->n[1], Lz = grid_->n[2];
-  int Gx = nxNH_, Gy = nyNH_, Gz = nzNH_;
-  std::string dumpDir = std::filesystem::path(dir).filename().string();
-  std::ostringstream stepDir;
-  stepDir << std::setw(4) << std::setfill('0') << out;
-
-#ifdef SINGLE_PRECISION
-  constexpr const char* VTK_REAL = "Float32";
-#else
-  constexpr const char* VTK_REAL = "Float64";
-#endif
-
-  // .pvti goes one level above dir (e.g. runName/, not runName/dump/)
-  std::ostringstream pvtiName;
-  pvtiName << std::filesystem::path(dir).parent_path().string() << "/" << name << "_"
-           << std::setw(4) << std::setfill('0') << out << ".pvti";
-  ofstream pvti(pvtiName.str(), ios_base::out);
-
-  pvti << "<?xml version=\"1.0\"?>\n";
-  pvti << "<VTKFile type=\"PImageData\" version=\"0.1\" byte_order=\"LittleEndian\" header_type=\"UInt32\">\n";
-  pvti << "  <PImageData WholeExtent=\"0 " << Gx << " 0 " << Gy << " 0 " << Gz << "\""
-       << " Origin=\"" << D_->boxMin(0) << " " << D_->boxMin(1) << " " << D_->boxMin(2) << "\""
-       << " Spacing=\"" << grid_->dx[0] << " " << grid_->dx[1] << " " << grid_->dx[2] << "\">\n";
-  pvti << "    <PCellData>\n";
-  for (int v = 0; v < FLD_TOT; v++)
-    pvti << "      <PDataArray type=\"" << VTK_REAL << "\" Name=\"" << varLabel[v] << "\"/>\n";
-  pvti << "    </PCellData>\n";
-
-  int Rx = D_->cartDims(0), Ry = D_->cartDims(1), Rz = D_->cartDims(2);
-  for (int iz = 0; iz < Rz; iz++) {
-    for (int iy = 0; iy < Ry; iy++) {
-      for (int ix = 0; ix < Rx; ix++) {
-        int coords[3] = {ix, iy, iz};
-        int rank;
-        MPI_Cart_rank(D_->cartComm(), coords, &rank);
-        int ps = ix * Lx, pe = ps + Lx;
-        int qs = iy * Ly, qe = qs + Ly;
-        int rs = iz * Lz, re = rs + Lz;
-        pvti << "    <Piece Extent=\"" << ps << " " << pe << " " << qs << " " << qe << " " << rs << " " << re << "\""
-             << " Source=\"" << dumpDir << "/" << stepDir.str() << "/rank_" << std::setw(4) << std::setfill('0') << rank << ".vti\"/>\n";
-      }
-    }
-  }
-  pvti << "  </PImageData>\n";
-  pvti << "</VTKFile>\n";
-  pvti.close();
-}
-
-void Problem::waitOut() {
-  if (outPending) {
-    MPI_Wait(&outReq, MPI_STATUS_IGNORE);
-    delete[] binBuf_;
-    binBuf_ = nullptr;
-    std::string footer = "\n  </AppendedData>\n</VTKFile>\n";
-    MPI_File_write(outFh, footer.data(), footer.size(), MPI_BYTE, MPI_STATUS_IGNORE);
-    MPI_File_close(&outFh);
-    outPending = false;
-    // Master writes .pvti for the just-completed dump (in dir/, not dir/XXXX/)
-    if (Log::isMaster() && prevValid_) {
-      writePVTI(prevDir_, prevName_, prevOut_);
-    }
-  }
 }
 
 void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
   if (fileIO_) {
     waitOut();
-    // Device code: interleave all variables into single out[] buffer
-    real *out_ = out;
+    // Device code: update *out with provided real
     if(dumpHalos){
-      qq.parallel_for<class parForDumpWH>(range(gr.nht), [=](id<1> i) {
+      for(int iVar=0; iVar<FLD_TOT; ++iVar) qq.memcpy(out[iVar], v[iVar], gr.nht*sizeof(real)); // Direct memcpy
+    } else {  // Manual indexing necessary
+      real *outt[FLD_TOT]; for (int i = 0; i < FLD_TOT; i++) outt[i] = out[i];
+      qq.parallel_for<class parForDump>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
+        auto iOut= it.get_linear_id(); // Output array has NH halo scope here
+        auto iV  = globLinId(it.get_id(), gr.nh, gr.h); // v has WH indexing; offset by halos
         for(int iVar=0; iVar<FLD_TOT; ++iVar)
-          out_[i * FLD_TOT + iVar] = v[iVar][i];
-      });
-    } else {
-      qq.parallel_for<class parForDumpNH>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
-        auto id = it.get_id();
-        auto iOut = id[0] + id[1] * gr.n[0] + id[2] * gr.n[0] * gr.n[1];
-        auto iV   = globLinId(id, gr.nh, gr.h);
-        for(int iVar=0; iVar<FLD_TOT; ++iVar)
-          out_[iOut * FLD_TOT + iVar] = v[iVar][iV];
+          outt[iVar][iOut] = v[iVar][iV];
       });
     }
     qq.wait_and_throw();
-    // Host code: async .vti write (header sync, binary async)
-    writeVTKAsync(gr, dir, name);
-    // Stash for next waitOut()'s .pvti
-    prevDir_ = dir; prevName_ = name; prevOut_ = iOut_; prevValid_ = true;
+    // Host code: .bov headers
+    writeBOV(gr, dir, name);
+    // MPI: start async .dat writes
+    {
+      int Ncell[NDIM], Ntot = 1;
+      for(int ii = 0; ii < NDIM; ++ii){
+        if(dumpHalos) Ncell[ii] = gr.nh[ii];
+        else          Ncell[ii] = gr.n [ii];
+        Ntot *= Ncell[ii];
+      }
+      for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
+        std::ostringstream datName;
+        datName << dir << "/" << std::setw(4) << std::setfill('0') << iOut_
+                << "/" << name << "_" << varLabel[iVar] << "_"
+                << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
+        MPI_File_open(MPI_COMM_SELF, datName.str().c_str(),
+                      MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &out_fh[iVar]);
+        MPI_File_iwrite(out_fh[iVar], out[iVar], Ntot, MPI_REAL, &out_req[iVar]);
+      }
+      out_pending = true;
+    }
   }
   iOut_++;
 }
@@ -279,8 +207,6 @@ void Problem::init(real_array &v, real_array &u) {
     Alfven(v,u);
   } else if (problemName == "Blastwave"s) {
     BlastWave(v, u);
-  } else if (problemName == "Gradient"s) {
-    Gradient(v, u);
   } else {
     Log::cout(0) << TAG << "Invalid problem " << problemName << ". The problem needs to be specified. Exiting." << Log::endl;
     abort();
@@ -413,34 +339,4 @@ void Problem::BlastWave(real_array &v, real_array &u){ // HOST CODE: Initializin
   D_->BCex(2,gr,v);  D_->BCex(1,gr,v);  D_->BCex(0,gr,v);
   dump(v); // Print ICs
   Log::cout(0) << TAG << "Initialized Problem Blastwave in " << stepTime_.lap() << Log::endl;
-}
-
-void Problem::Gradient(real_array &v, real_array &u){ // HOST CODE: Initializing
-  real gradRho0 = config.getOr<real>("gradRho0", 1.0);
-  real gradRho1 = config.getOr<real>("gradRho1", 2.0);
-  real gradP0   = config.getOr<real>("gradP0",   1.0);
-  real bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
-  real bMin0 = D_->boxMin(0);
-  Grid gr = *grid_;
-  qq.parallel_for<class parForProblemGradient>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
-    auto i = globLinId(it, gr.nh, gr.h);
-    real x = (gr.xC(it, 0) - bMin0) / bS[0];  // normalized 0..1
-    real rho = gradRho0 + (gradRho1 - gradRho0) * x;
-    real pg  = gradP0 * rho / gradRho0;  // isothermal: P/ρ constant
-    v[VX][i] = 0.0;
-    v[VY][i] = 0.0;
-    v[VZ][i] = 0.0;
-    v[BX][i] = 0.0;
-    v[BY][i] = 0.0;
-    v[BZ][i] = 0.0;
-    v[RH][i] = rho;
-    v[PG][i] = pg;
-    id<3> id = it.get_id();
-    Metric g(gr.xC(id, 0), gr.xC(id, 1), gr.xC(id, 2));
-    prim2cons(i, gr.nht, v, u, g);
-    cons2prim(i, gr.nht, u, v, g);
-  }).wait_and_throw();
-  D_->BCex(2,gr,v);  D_->BCex(1,gr,v);  D_->BCex(0,gr,v);
-  dump(v);
-  Log::cout(0) << TAG << "Initialized Problem Gradient in " << stepTime_.lap() << Log::endl;
 }
