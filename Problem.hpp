@@ -50,8 +50,8 @@ class Problem {
       std::string n = name.empty() ? runName_ : name;
       dump(fld, *(this->grid_), d, n);
     };
-    std::string getTimings() { return stepTime_.getTimings(); }
     void waitOut();
+    std::string getTimings() { return stepTime_.getTimings(); }
 
     // Generic problem initializer -- calls specific inits based on config
     void init(real_array &v, real_array &u);
@@ -63,7 +63,8 @@ class Problem {
     void Gradient (real_array &v, real_array &u);
 
   private:
-    void writeBOV(Grid &gr, std::string dir, std::string name);
+    void writeVTKAsync(Grid &gr, std::string dir, std::string name);
+    void writePVTI(std::string dir, std::string name, unsigned long out);
     static constexpr const char* varLabel[FLD_TOT] = {
         "RH", "VX", "VY", "VZ", "PG", "BX", "BY", "BZ"
     };
@@ -74,13 +75,19 @@ class Problem {
     real tMax_, t_, dt_, cfl_, tOut_;
     real *v_[FLD_TOT], *u_[FLD_TOT], dt_prev_;
     unsigned int N_, nxNH_, nyNH_, nzNH_;
-    unsigned long BOVRank_; // Necessary as BOV output assumes zyx output order
+    unsigned long BOVRank_;
     unsigned long iOut_, iStep_, nStep_;
     Grid   *grid_;
     Domain *D_;
-    MPI_File out_fh;
-    MPI_Request out_req;
-    bool out_pending = false;
+    // Async MPI I/O state
+    bool     outPending = false;
+    MPI_File   outFh;
+    MPI_Request outReq;
+    char      *binBuf_ = nullptr;
+    // Stash for one-dump-behind .pvti
+    std::string prevDir_, prevName_;
+    unsigned long prevOut_ = 0;
+    bool       prevValid_ = false;
 };
 
 #endif

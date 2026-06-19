@@ -22,7 +22,9 @@
 #include <sycl/sycl.hpp>
 
 #include <algorithm>
+#include <ctime>
 #include <filesystem>
+#include <iomanip>
 
 using namespace sycl;
 
@@ -34,6 +36,11 @@ int main(int argc, char** argv ) {
 
   //-- Logger
   std::string runName = param.getOr("runName", std::filesystem::path(parFile).stem().string());
+  std::time_t t = std::time(nullptr);
+  std::tm tm = *std::localtime(&t);
+  std::ostringstream ss;
+  ss << std::put_time(&tm, "%Y-%m-%dT%H%M_") << runName;
+  runName = ss.str();
   int clogVerbosity = param.getOr("clogVerb", 4);
   int coutVerbosity = param.getOr("coutVerb", 4);
   std::string logfileName = param.getOr("clogName", "log"s);
@@ -218,7 +225,6 @@ int main(int argc, char** argv ) {
   Log::togglePcontrol(0);
 
   problem.waitOut();
-
   free(out, qDev);
   for (int i=0; i < FLD_TOT; ++i){ free(  v[i], qDev); }
   for (int i=0; i < FLD_TOT; ++i){ free(  u[i], qDev); }

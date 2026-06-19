@@ -81,61 +81,146 @@ void Problem::dtUpdate(real aMax){
   iStep_++;
 }
 
-void Problem::waitOut() {
-  if (out_pending) {
-    MPI_Wait(&out_req, MPI_STATUS_IGNORE);
-    MPI_File_close(&out_fh);
-    out_pending = false;
-  }
-}
-
-void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
+void Problem::writeVTKAsync(Grid &gr, std::string dir, std::string name) {
   Log::Assert(out != nullptr, "Array was not initialized.");
+  if (dumpHalos) return;
+
+  int Ncell[NDIM];
+  for(int ii = 0; ii < NDIM; ++ii)
+    Ncell[ii] = gr.n[ii];
+  int Ntot = Ncell[0] * Ncell[1] * Ncell[2];
+
+  int Gx = nxNH_, Gy = nyNH_, Gz = nzNH_;
+  int Lx = gr.n[0], Ly = gr.n[1], Lz = gr.n[2];
+  int xs = D_->cartCoords(0) * Lx;
+  int ys = D_->cartCoords(1) * Ly;
+  int zs = D_->cartCoords(2) * Lz;
+  int xe = xs + Lx;
+  int ye = ys + Ly;
+  int ze = zs + Lz;
+
+  // Per-variable binary blocks: each = [uint32_t blockSize][Ntot*sizeof(real) data]
+  size_t perVarData = static_cast<size_t>(Ntot) * sizeof(real);
+  uint32_t perVarBlock = static_cast<uint32_t>(perVarData);
+  size_t varBlkBytes = sizeof(uint32_t) + perVarData;
+
+#ifdef SINGLE_PRECISION
+  constexpr const char* VTK_REAL = "Float32";
+#else
+  constexpr const char* VTK_REAL = "Float64";
+#endif
 
   std::filesystem::create_directories(dir);
-
   std::ostringstream stepDir;
   stepDir << dir << "/" << std::setw(4) << std::setfill('0') << iOut_;
   std::filesystem::create_directories(stepDir.str());
 
-  int Ncell[NDIM];
-  real brickSize  [NDIM];
-  real brickOrigin[NDIM] = {D_->boxMin (0), D_->boxMin (1), D_->boxMin (2)};
+  // XML header with per-variable named DataArrays
+  std::ostringstream hdr;
+  hdr << "<?xml version=\"1.0\"?>\n";
+  hdr << "<VTKFile type=\"ImageData\" version=\"0.1\" byte_order=\"LittleEndian\" header_type=\"UInt32\">\n";
+  hdr << "  <ImageData WholeExtent=\"0 " << Gx << " 0 " << Gy << " 0 " << Gz << "\""
+      << " Origin=\"" << D_->boxMin(0) << " " << D_->boxMin(1) << " " << D_->boxMin(2) << "\""
+      << " Spacing=\"" << gr.dx[0] << " " << gr.dx[1] << " " << gr.dx[2] << "\">\n";
+  hdr << "    <Piece Extent=\"" << xs << " " << xe << " " << ys << " " << ye << " " << zs << " " << ze << "\">\n";
+  hdr << "      <CellData>\n";
+  for (int v = 0; v < FLD_TOT; v++) {
+    size_t off = static_cast<size_t>(v) * varBlkBytes;
+    hdr << "        <DataArray type=\"" << VTK_REAL << "\" Name=\"" << varLabel[v]
+        << "\" format=\"appended\" offset=\"" << off << "\"/>\n";
+  }
+  hdr << "      </CellData>\n";
+  hdr << "    </Piece>\n";
+  hdr << "  </ImageData>\n";
+  hdr << "  <AppendedData encoding=\"raw\">\n";
+  hdr << "    _";
+  std::string header = hdr.str();
 
-  for(int ii = 0; ii < NDIM; ++ii){
-    if(dumpHalos){
-      Ncell[ii] = gr.nh[ii];
-      brickOrigin[ii]*=(1.0*gr.nh[ii])/gr.n[ii];
-    } else {
-      Ncell[ii] = gr.n[ii];
-    }
-    brickSize[ii] = Ncell[ii] * D_->cartDims(ii) * gr.dx[ii];
+  // Pack interleaved out[] into per-variable contiguous blocks
+  size_t binSize = static_cast<size_t>(FLD_TOT) * varBlkBytes;
+  binBuf_ = new char[binSize];
+  for (int v = 0; v < FLD_TOT; v++) {
+    size_t blkOff = static_cast<size_t>(v) * varBlkBytes;
+    *reinterpret_cast<uint32_t*>(binBuf_ + blkOff) = perVarBlock;
+    real *varDst = reinterpret_cast<real*>(binBuf_ + blkOff + sizeof(uint32_t));
+    for (int i = 0; i < Ntot; i++)
+      varDst[i] = out[i * FLD_TOT + v];
   }
 
-  if (Log::isMaster()) {
-    std::ostringstream bovName;
-    bovName << dir << "/" << name << "_"
-            << std::setw(4) << std::setfill('0') << iOut_ << ".bov";
-    ofstream bov; bov.open(bovName.str(), ios_base::out);
-    bov << "TIME: " << t() << "\n";
-    bov << "DATA_FILE: " << std::setw(4) << std::setfill('0') << iOut_
-        << "/" << name << "_%04d.dat\n";
-    bov << "DATA_SIZE: " << Ncell[2] * D_->cartDims(2) << " "
-        << Ncell[1] * D_->cartDims(1) << " "
-        << Ncell[0] * D_->cartDims(0) << "\n";
-    bov << "DATA_FORMAT: " << FIELD_FORMAT << "\n";
-    bov << "VARIABLE: fld\n";
-    bov << "DATA_ENDIAN: LITTLE\n";
-    bov << "CENTERING: zonal\n";
-    bov << "BRICK_ORIGIN: " << brickOrigin[2] << " " << brickOrigin[1] << " " << brickOrigin[0] << "\n";
-    bov << "BRICK_SIZE: "  << brickSize[2]  << " " << brickSize[1]  << " " << brickSize[0]  << "\n";
-    bov << "DIVIDE_BRICK: false\n";
-    bov << "DATA_BRICKLETS: " << Ncell[2] << " " << Ncell[1] << " " << Ncell[0] << "\n";
-    bov << "DATA_COMPONENTS: " << FLD_TOT << "\n";
-    bov << std::flush; bov.close();
-  }
+  // Open .vti, write header sync, start async write of packed binary
+  std::ostringstream vtiName;
+  vtiName << stepDir.str() << "/rank_"
+          << std::setw(4) << std::setfill('0') << BOVRank_ << ".vti";
+  MPI_File_open(MPI_COMM_SELF, vtiName.str().c_str(),
+                MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &outFh);
+  MPI_File_write(outFh, header.data(), header.size(), MPI_BYTE, MPI_STATUS_IGNORE);
+  MPI_File_iwrite(outFh, binBuf_, binSize, MPI_BYTE, &outReq);
+  outPending = true;
 
   Log::cout(0) << TAG << "Dumped " << dir << " (" << name << ") output #" << iOut_ << Log::endl;
+}
+
+void Problem::writePVTI(std::string dir, std::string name, unsigned long out) {
+  int Lx = grid_->n[0], Ly = grid_->n[1], Lz = grid_->n[2];
+  int Gx = nxNH_, Gy = nyNH_, Gz = nzNH_;
+  std::ostringstream stepDir;
+  stepDir << std::setw(4) << std::setfill('0') << out;
+
+#ifdef SINGLE_PRECISION
+  constexpr const char* VTK_REAL = "Float32";
+#else
+  constexpr const char* VTK_REAL = "Float64";
+#endif
+
+  std::ostringstream pvtiName;
+  pvtiName << dir << "/" << name << "_"
+           << std::setw(4) << std::setfill('0') << out << ".pvti";
+  ofstream pvti(pvtiName.str(), ios_base::out);
+
+  pvti << "<?xml version=\"1.0\"?>\n";
+  pvti << "<VTKFile type=\"PImageData\" version=\"0.1\" byte_order=\"LittleEndian\" header_type=\"UInt32\">\n";
+  pvti << "  <PImageData WholeExtent=\"0 " << Gx << " 0 " << Gy << " 0 " << Gz << "\""
+       << " Origin=\"" << D_->boxMin(0) << " " << D_->boxMin(1) << " " << D_->boxMin(2) << "\""
+       << " Spacing=\"" << grid_->dx[0] << " " << grid_->dx[1] << " " << grid_->dx[2] << "\">\n";
+  pvti << "    <PCellData>\n";
+  for (int v = 0; v < FLD_TOT; v++)
+    pvti << "      <PDataArray type=\"" << VTK_REAL << "\" Name=\"" << varLabel[v] << "\"/>\n";
+  pvti << "    </PCellData>\n";
+
+  int Rx = D_->cartDims(0), Ry = D_->cartDims(1), Rz = D_->cartDims(2);
+  for (int iz = 0; iz < Rz; iz++) {
+    for (int iy = 0; iy < Ry; iy++) {
+      for (int ix = 0; ix < Rx; ix++) {
+        int coords[3] = {ix, iy, iz};
+        int rank;
+        MPI_Cart_rank(D_->cartComm(), coords, &rank);
+        int ps = ix * Lx, pe = ps + Lx;
+        int qs = iy * Ly, qe = qs + Ly;
+        int rs = iz * Lz, re = rs + Lz;
+        pvti << "    <Piece Extent=\"" << ps << " " << pe << " " << qs << " " << qe << " " << rs << " " << re << "\""
+             << " Source=\"" << stepDir.str() << "/rank_" << std::setw(4) << std::setfill('0') << rank << ".vti\"/>\n";
+      }
+    }
+  }
+  pvti << "  </PImageData>\n";
+  pvti << "</VTKFile>\n";
+  pvti.close();
+}
+
+void Problem::waitOut() {
+  if (outPending) {
+    MPI_Wait(&outReq, MPI_STATUS_IGNORE);
+    delete[] binBuf_;
+    binBuf_ = nullptr;
+    std::string footer = "\n  </AppendedData>\n</VTKFile>\n";
+    MPI_File_write(outFh, footer.data(), footer.size(), MPI_BYTE, MPI_STATUS_IGNORE);
+    MPI_File_close(&outFh);
+    outPending = false;
+    // Master writes .pvti for the just-completed dump (in dir/, not dir/XXXX/)
+    if (Log::isMaster() && prevValid_) {
+      writePVTI(prevDir_, prevName_, prevOut_);
+    }
+  }
 }
 
 void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
@@ -150,32 +235,18 @@ void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
       });
     } else {
       qq.parallel_for<class parForDumpNH>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
-        auto iOut = it.get_linear_id();
-        auto iV   = globLinId(it.get_id(), gr.nh, gr.h);
+        auto id = it.get_id();
+        auto iOut = id[0] + id[1] * gr.n[0] + id[2] * gr.n[0] * gr.n[1];
+        auto iV   = globLinId(id, gr.nh, gr.h);
         for(int iVar=0; iVar<FLD_TOT; ++iVar)
           out_[iOut * FLD_TOT + iVar] = v[iVar][iV];
       });
     }
     qq.wait_and_throw();
-    // Host code: .bov headers
-    writeBOV(gr, dir, name);
-    // MPI: start async .dat write
-    {
-      int Ncell[NDIM], Ntot = 1;
-      for(int ii = 0; ii < NDIM; ++ii){
-        if(dumpHalos) Ncell[ii] = gr.nh[ii];
-        else          Ncell[ii] = gr.n [ii];
-        Ntot *= Ncell[ii];
-      }
-      std::ostringstream datName;
-      datName << dir << "/" << std::setw(4) << std::setfill('0') << iOut_
-              << "/" << name << "_"
-              << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
-      MPI_File_open(MPI_COMM_SELF, datName.str().c_str(),
-                    MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &out_fh);
-      MPI_File_iwrite(out_fh, out, Ntot * FLD_TOT, MPI_REAL, &out_req);
-      out_pending = true;
-    }
+    // Host code: async .vti write (header sync, binary async)
+    writeVTKAsync(gr, dir, name);
+    // Stash for next waitOut()'s .pvti
+    prevDir_ = dir; prevName_ = name; prevOut_ = iOut_; prevValid_ = true;
   }
   iOut_++;
 }
