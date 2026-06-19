@@ -22,6 +22,7 @@
 #include <sycl/sycl.hpp>
 
 #include <algorithm>
+#include <filesystem>
 
 using namespace sycl;
 
@@ -32,10 +33,12 @@ int main(int argc, char** argv ) {
   Parameters param(parFile);
 
   //-- Logger
+  std::string runName = param.getOr("runName", std::filesystem::path(parFile).stem().string());
   int clogVerbosity = param.getOr("clogVerb", 4);
   int coutVerbosity = param.getOr("coutVerb", 4);
   std::string logfileName = param.getOr("clogName", "log"s);
-  Log::init(logfileName, coutVerbosity, clogVerbosity);
+  std::filesystem::create_directories(runName + "/log");
+  Log::init(runName + "/log/" + logfileName, coutVerbosity, clogVerbosity);
   Log::togglePcontrol(0);
 
   //-- Parameters
@@ -73,7 +76,7 @@ int main(int argc, char** argv ) {
 
   // -- Allocations
   int ok = 1;
-  real *out[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){out[i] = malloc_shared<real>(Nout , qDev); ok*=(NULL!=out[i]); } // For ease of custom output
+  real *out = malloc_shared<real>(Nout * FLD_TOT, qDev); ok = (NULL != out);
   real   *v[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  v[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!=  v[i]); } // Primitives
   real   *u[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  u[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!=  u[i]); } // Conserved
   real  *du[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ du[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!= du[i]); } // Time Evolution
@@ -92,7 +95,7 @@ int main(int argc, char** argv ) {
 
   //-- Problem
   real dtLoc; // local copy of time, for ease of capture
-  Problem problem(qDev, param, &grid, DD, out);
+  Problem problem(qDev, param, &grid, DD, out, runName);
   problem.init(v, u);  // Inits v and u in DEVICE based on param scenario, calls BCex, prints ICs.
 
   //-- SYCL ranges and related accessories
@@ -162,8 +165,8 @@ int main(int argc, char** argv ) {
         DD->BCex(myDir, gridF[myDir], f, BCEX_FL); // call BCEX on fluxes.
 
 #ifndef NDEBUG
-	problem.dump(f    , gridF[myDir], "flux"+std::to_string(myDir));
-	problem.dump(debug, grid        , "debug"                     );
+	problem.dump(f    , gridF[myDir], runName+"/flux"+std::to_string(myDir), runName);
+	problem.dump(debug, grid        , runName+"/debug"                     , runName);
 #endif
         qDev.parallel_for<class parForUpdateDu>(rStd, [=](item<3> it) { //-- Update du with current direction
           id<3> id = it.get_id();
@@ -216,7 +219,7 @@ int main(int argc, char** argv ) {
 
   problem.waitOut();
 
-  for (int i=0; i < FLD_TOT; ++i){ free(out[i], qDev); }
+  free(out, qDev);
   for (int i=0; i < FLD_TOT; ++i){ free(  v[i], qDev); }
   for (int i=0; i < FLD_TOT; ++i){ free(  u[i], qDev); }
   for (int i=0; i < FLD_TOT; ++i){ free( u0[i], qDev); }

@@ -21,7 +21,8 @@
 using namespace std;
 using namespace sycl;
 
-Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, real_array &fld ): config(parFile) {
+Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, real *fld, std::string runName): config(parFile) {
+  runName_ = config.getOr("runName", runName);
   grid_ = grid; D_ = D; N_ = grid_->nht;
   iOut_ = 0; iStep_ = 0; nStep_ = config.getOr("nStep", 0);  dumpHalos = static_cast<bool>(config.getOr("dumpHalos", 0)); locSize = config.getOr("locSize", 1); fileIO_ = static_cast<bool>(config.getOr("fileIO", 1));
   tMax_   = config.getOr<real>("tMax", 1.0); dt_ = 0.0; dt_prev_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8 / static_cast<real>(NDIM); // Divide by NDIM dimensions
@@ -32,7 +33,7 @@ Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, rea
   nyNH_ = D_->cartDims(1) * grid_->n[1];
   nzNH_ = D_->cartDims(2) * grid_->n[2];
   Log::Assert(fld != NULL, "Allocate var and assign fld before initializing the problem.");
-  for(int iVar=0; iVar<FLD_TOT; ++iVar) out[iVar] = fld[iVar];
+  out = fld;
   Log::cout(6) << TAG << "Problem framework of size " << N_ << " and output dir created." << Log::endl;
   // Option to chenge the order of BOV output for the various MPI ranks. E.g. a z-first approach is:
   // BOVRank_=D_->cartCoords(2)+( D_->cartCoords(1)+D_->cartCoords(0)*D_->cartDims(1) )*D_->cartDims(2);
@@ -82,14 +83,14 @@ void Problem::dtUpdate(real aMax){
 
 void Problem::waitOut() {
   if (out_pending) {
-    MPI_Waitall(FLD_TOT, out_req, MPI_STATUSES_IGNORE);
-    for (int i = 0; i < FLD_TOT; ++i) MPI_File_close(&out_fh[i]);
+    MPI_Wait(&out_req, MPI_STATUS_IGNORE);
+    MPI_File_close(&out_fh);
     out_pending = false;
   }
 }
 
 void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
-  Log::Assert(out[0] != nullptr, "Array was not initialized.");
+  Log::Assert(out != nullptr, "Array was not initialized.");
 
   std::filesystem::create_directories(dir);
 
@@ -111,30 +112,27 @@ void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
     brickSize[ii] = Ncell[ii] * D_->cartDims(ii) * gr.dx[ii];
   }
 
-  for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
-
-    if (Log::isMaster()) {
-      std::ostringstream bovName;
-      bovName << dir << "/" << varLabel[iVar] << "_"
-              << std::setw(4) << std::setfill('0') << iOut_ << ".bov";
-      ofstream bov; bov.open(bovName.str(), ios_base::out);
-      bov << "TIME: " << t() << "\n";
-      bov << "DATA_FILE: " << std::setw(4) << std::setfill('0') << iOut_
-          << "/" << name << "_" << varLabel[iVar] << "_%04d.dat\n";
-      bov << "DATA_SIZE: " << Ncell[2] * D_->cartDims(2) << " "
-          << Ncell[1] * D_->cartDims(1) << " "
-          << Ncell[0] * D_->cartDims(0) << "\n";
-      bov << "DATA_FORMAT: " << FIELD_FORMAT << "\n";
-      bov << "VARIABLE: v\n";
-      bov << "DATA_ENDIAN: LITTLE\n";
-      bov << "CENTERING: zonal\n";
-      bov << "BRICK_ORIGIN: " << brickOrigin[2] << " " << brickOrigin[1] << " " << brickOrigin[0] << "\n";
-      bov << "BRICK_SIZE: "  << brickSize[2]  << " " << brickSize[1]  << " " << brickSize[0]  << "\n";
-      bov << "DIVIDE_BRICK: false\n";
-      bov << "DATA_BRICKLETS: " << Ncell[2] << " " << Ncell[1] << " " << Ncell[0] << "\n";
-      bov << "DATA_COMPONENTS: 1\n";
-      bov << std::flush; bov.close();
-    }
+  if (Log::isMaster()) {
+    std::ostringstream bovName;
+    bovName << dir << "/" << name << "_"
+            << std::setw(4) << std::setfill('0') << iOut_ << ".bov";
+    ofstream bov; bov.open(bovName.str(), ios_base::out);
+    bov << "TIME: " << t() << "\n";
+    bov << "DATA_FILE: " << std::setw(4) << std::setfill('0') << iOut_
+        << "/" << name << "_%04d.dat\n";
+    bov << "DATA_SIZE: " << Ncell[2] * D_->cartDims(2) << " "
+        << Ncell[1] * D_->cartDims(1) << " "
+        << Ncell[0] * D_->cartDims(0) << "\n";
+    bov << "DATA_FORMAT: " << FIELD_FORMAT << "\n";
+    bov << "VARIABLE: fld\n";
+    bov << "DATA_ENDIAN: LITTLE\n";
+    bov << "CENTERING: zonal\n";
+    bov << "BRICK_ORIGIN: " << brickOrigin[2] << " " << brickOrigin[1] << " " << brickOrigin[0] << "\n";
+    bov << "BRICK_SIZE: "  << brickSize[2]  << " " << brickSize[1]  << " " << brickSize[0]  << "\n";
+    bov << "DIVIDE_BRICK: false\n";
+    bov << "DATA_BRICKLETS: " << Ncell[2] << " " << Ncell[1] << " " << Ncell[0] << "\n";
+    bov << "DATA_COMPONENTS: " << FLD_TOT << "\n";
+    bov << std::flush; bov.close();
   }
 
   Log::cout(0) << TAG << "Dumped " << dir << " (" << name << ") output #" << iOut_ << Log::endl;
@@ -143,22 +141,25 @@ void Problem::writeBOV(Grid &gr, std::string dir, std::string name) {
 void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
   if (fileIO_) {
     waitOut();
-    // Device code: update *out with provided real
+    // Device code: interleave all variables into single out[] buffer
+    real *out_ = out;
     if(dumpHalos){
-      for(int iVar=0; iVar<FLD_TOT; ++iVar) qq.memcpy(out[iVar], v[iVar], gr.nht*sizeof(real)); // Direct memcpy
-    } else {  // Manual indexing necessary
-      real *outt[FLD_TOT]; for (int i = 0; i < FLD_TOT; i++) outt[i] = out[i];
-      qq.parallel_for<class parForDump>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
-        auto iOut= it.get_linear_id(); // Output array has NH halo scope here
-        auto iV  = globLinId(it.get_id(), gr.nh, gr.h); // v has WH indexing; offset by halos
+      qq.parallel_for<class parForDumpWH>(range(gr.nht), [=](id<1> i) {
         for(int iVar=0; iVar<FLD_TOT; ++iVar)
-          outt[iVar][iOut] = v[iVar][iV];
+          out_[i * FLD_TOT + iVar] = v[iVar][i];
+      });
+    } else {
+      qq.parallel_for<class parForDumpNH>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
+        auto iOut = it.get_linear_id();
+        auto iV   = globLinId(it.get_id(), gr.nh, gr.h);
+        for(int iVar=0; iVar<FLD_TOT; ++iVar)
+          out_[iOut * FLD_TOT + iVar] = v[iVar][iV];
       });
     }
     qq.wait_and_throw();
     // Host code: .bov headers
     writeBOV(gr, dir, name);
-    // MPI: start async .dat writes
+    // MPI: start async .dat write
     {
       int Ncell[NDIM], Ntot = 1;
       for(int ii = 0; ii < NDIM; ++ii){
@@ -166,15 +167,13 @@ void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
         else          Ncell[ii] = gr.n [ii];
         Ntot *= Ncell[ii];
       }
-      for (int iVar = 0; iVar < FLD_TOT; ++iVar) {
-        std::ostringstream datName;
-        datName << dir << "/" << std::setw(4) << std::setfill('0') << iOut_
-                << "/" << name << "_" << varLabel[iVar] << "_"
-                << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
-        MPI_File_open(MPI_COMM_SELF, datName.str().c_str(),
-                      MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &out_fh[iVar]);
-        MPI_File_iwrite(out_fh[iVar], out[iVar], Ntot, MPI_REAL, &out_req[iVar]);
-      }
+      std::ostringstream datName;
+      datName << dir << "/" << std::setw(4) << std::setfill('0') << iOut_
+              << "/" << name << "_"
+              << std::setw(4) << std::setfill('0') << BOVRank_ << ".dat";
+      MPI_File_open(MPI_COMM_SELF, datName.str().c_str(),
+                    MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &out_fh);
+      MPI_File_iwrite(out_fh, out, Ntot * FLD_TOT, MPI_REAL, &out_req);
       out_pending = true;
     }
   }

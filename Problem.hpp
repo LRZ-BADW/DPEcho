@@ -25,9 +25,9 @@ class Problem {
   public:
     int locSize;
     bool fileIO_, dumpHalos;
-    real *out[FLD_TOT]; // Just to print
+    real *out; // Interleaved output buffer (Ncell * FLD_TOT)
 
-    Problem(sycl::queue q, Parameters &param, Grid *g, Domain *f, real_array &out);
+    Problem(sycl::queue q, Parameters &param, Grid *g, Domain *f, real *out, std::string runName = "task");
     void InitRampWH (real *);
     void InitRampNH (real *);
     void InitConstWH(real *, real );
@@ -44,8 +44,12 @@ class Problem {
     inline unsigned long BOVRank(){return BOVRank_;}
     // Output
     void dtUpdate(real);
-    void dump( real_array &fld, Grid &gr, std::string dir="out", std::string name="task");
-    void dump( real_array &fld, std::string dir="out", std::string name="task"){ dump(fld,*(this->grid_),dir,name ); };
+    void dump( real_array &fld, Grid &gr, std::string dir, std::string name);
+    void dump( real_array &fld, std::string dir="", std::string name="") {
+      std::string d = dir.empty() ? runName_ + "/out" : runName_ + "/" + dir;
+      std::string n = name.empty() ? runName_ : name;
+      dump(fld, *(this->grid_), d, n);
+    };
     std::string getTimings() { return stepTime_.getTimings(); }
     void waitOut();
 
@@ -63,6 +67,7 @@ class Problem {
     static constexpr const char* varLabel[FLD_TOT] = {
         "RH", "VX", "VY", "VZ", "PG", "BX", "BY", "BZ"
     };
+    std::string runName_;
     Parameters &config;
     sycl::queue qq;
     TB::Timer stepTime_;
@@ -73,8 +78,8 @@ class Problem {
     unsigned long iOut_, iStep_, nStep_;
     Grid   *grid_;
     Domain *D_;
-    MPI_File out_fh[FLD_TOT];
-    MPI_Request out_req[FLD_TOT];
+    MPI_File out_fh;
+    MPI_Request out_req;
     bool out_pending = false;
 };
 
