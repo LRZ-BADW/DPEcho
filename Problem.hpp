@@ -56,6 +56,7 @@ class Problem {
     void Uniform  (real_array &v, real_array &u);
     void Alfven   (real_array &v, real_array &u);
     void BlastWave(real_array &v, real_array &u);
+    void Gradient (real_array &v, real_array &u);
 
   private:
     void writeBOV(Grid &gr, std::string dir, std::string name);

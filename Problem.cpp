@@ -207,6 +207,8 @@ void Problem::init(real_array &v, real_array &u) {
     Alfven(v,u);
   } else if (problemName == "Blastwave"s) {
     BlastWave(v, u);
+  } else if (problemName == "Gradient"s) {
+    Gradient(v, u);
   } else {
     Log::cout(0) << TAG << "Invalid problem " << problemName << ". The problem needs to be specified. Exiting." << Log::endl;
     abort();
@@ -339,4 +341,34 @@ void Problem::BlastWave(real_array &v, real_array &u){ // HOST CODE: Initializin
   D_->BCex(2,gr,v);  D_->BCex(1,gr,v);  D_->BCex(0,gr,v);
   dump(v); // Print ICs
   Log::cout(0) << TAG << "Initialized Problem Blastwave in " << stepTime_.lap() << Log::endl;
+}
+
+void Problem::Gradient(real_array &v, real_array &u){ // HOST CODE: Initializing
+  real gradRho0 = config.getOr<real>("gradRho0", 1.0);
+  real gradRho1 = config.getOr<real>("gradRho1", 2.0);
+  real gradP0   = config.getOr<real>("gradP0",   1.0);
+  real bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
+  real bMin0 = D_->boxMin(0);
+  Grid gr = *grid_;
+  qq.parallel_for<class parForProblemGradient>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
+    auto i = globLinId(it, gr.nh, gr.h);
+    real x = (gr.xC(it, 0) - bMin0) / bS[0];  // normalized 0..1
+    real rho = gradRho0 + (gradRho1 - gradRho0) * x;
+    real pg  = gradP0 * rho / gradRho0;  // isothermal: P/ρ constant
+    v[VX][i] = 0.0;
+    v[VY][i] = 0.0;
+    v[VZ][i] = 0.0;
+    v[BX][i] = 0.0;
+    v[BY][i] = 0.0;
+    v[BZ][i] = 0.0;
+    v[RH][i] = rho;
+    v[PG][i] = pg;
+    id<3> id = it.get_id();
+    Metric g(gr.xC(id, 0), gr.xC(id, 1), gr.xC(id, 2));
+    prim2cons(i, gr.nht, v, u, g);
+    cons2prim(i, gr.nht, u, v, g);
+  }).wait_and_throw();
+  D_->BCex(2,gr,v);  D_->BCex(1,gr,v);  D_->BCex(0,gr,v);
+  dump(v);
+  Log::cout(0) << TAG << "Initialized Problem Gradient in " << stepTime_.lap() << Log::endl;
 }
