@@ -19,6 +19,8 @@ add_executable (dpecho
   echo.cpp Logger.cpp Grid.cpp Domain.cpp Problem.cpp Metric.cpp Solver.cpp Device.cpp Parameters.cpp
   $<$<STREQUAL:${PHYSICS},MHD>:Physics/MHD.cpp>
   $<$<STREQUAL:${PHYSICS},GRMHD>:Physics/GRMHD.cpp>
+  $<$<STREQUAL:${PHYSICS},HD>:Physics/HD.cpp>
+  $<$<STREQUAL:${PHYSICS},GRHD>:Physics/GRHD.cpp>
   echo.hpp Logger.hpp Grid.hpp Domain.hpp Problem.hpp Physics.hpp Metric.hpp Solver.hpp Device.hpp Parameters.hpp
 )
 set_target_properties(dpecho PROPERTIES OUTPUT_NAME "dpecho")
@@ -201,12 +203,16 @@ else ()
   unset(RECONSTR CACHE)
 endif(REC_ORDER LESS_EQUAL 2)
 
-set(PHYSTYPE MHD GRMHD)
+set(PHYSTYPE MHD GRMHD HD GRHD)
 set(PHYSICS GRMHD CACHE STRING "Choose Physics Solver")
 set_property(CACHE PHYSICS PROPERTY STRINGS ${PHYSTYPE})
 target_compile_definitions(dpecho PUBLIC PHYSICS=${PHYSICS})
 if (PHYSICS STREQUAL GRMHD)
   set(SUFFIX ${SUFFIX}_gr)
+elseif (PHYSICS STREQUAL HD)
+  set(SUFFIX ${SUFFIX}_hd)
+elseif (PHYSICS STREQUAL GRHD)
+  set(SUFFIX ${SUFFIX}_grhd)
 endif()
 
 ##-- Executable name

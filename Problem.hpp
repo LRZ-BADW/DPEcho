@@ -69,9 +69,15 @@ class Problem {
   private:
     void writeVTKAsync(Grid &gr, std::string dir, std::string name);
     void writePVTI(std::string dir, std::string name, unsigned long out);
-    static constexpr const char* varLabel[FLD_TOT] = {
+#if PHYSICS == MHD || PHYSICS == GRMHD
+    static constexpr const char* varLabel[8] = {
         "RH", "VX", "VY", "VZ", "PG", "BX", "BY", "BZ"
     };
+#else
+    static constexpr const char* varLabel[5] = {
+        "RH", "VX", "VY", "VZ", "PG"
+    };
+#endif
     std::string runName_;
     Parameters &config;
     sycl::queue qq;

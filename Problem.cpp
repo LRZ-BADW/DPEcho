@@ -376,8 +376,10 @@ void Problem::init(real_array &v, real_array &u) {
   string problemName = config.getOr("problem", "INVALID"s);
   if (problemName == "Uniform"s) {
     Uniform(v, u);
+#if PHYSICS == MHD || PHYSICS == GRMHD
   } else if (problemName == "Alfven"s) {
     Alfven(v,u);
+#endif
   } else if (problemName == "Blastwave"s) {
     BlastWave(v, u);
   } else if (problemName == "Gradient"s) {
@@ -395,7 +397,9 @@ void Problem::Uniform(real_array &v, real_array &u){ // HOST CODE: Initializing
   auto xx = config.getOr("uniConst", 1.0);
   InitConstWH(v[RH], xx);  InitConstWH(v[PG], 1.); // this is all device code
   InitConstWH(v[VX], .5);  InitConstWH(v[VY], .5); InitConstWH(v[VZ], .5);
+#if PHYSICS == MHD || PHYSICS == GRMHD
   InitConstWH(v[BX], 0.);  InitConstWH(v[BY], 0.); InitConstWH(v[BZ], 0.);
+#endif
   qq.wait_and_throw();
   Log::cout(0) << TAG << "Initialized Problem Uniform." << Log::endl;
 
@@ -415,6 +419,7 @@ void Problem::Uniform(real_array &v, real_array &u){ // HOST CODE: Initializing
   Log::cout(0) << TAG << "Initialized Problem Uniform in " << stepTime_.lap() << Log::endl;
 }
 
+#if PHYSICS == MHD || PHYSICS == GRMHD
 void Problem::Alfven(real_array &v, real_array &u){ // HOST CODE: Initializing
   real alfRH = config.getOr<real>("alfRH", 1.0), alfB0 = config.getOr<real>("alfB0", 1.0), alfPG = config.getOr<real>("alfPG", 1.0), alfAmp=config.getOr<real>("alfAmp", 1.0);
   real alfLx = config.getOr<real>("alfLx", 1.0), alfLy = config.getOr<real>("alfLy", 1.0), alfLz = config.getOr<real>("alfLz", 1.0);
@@ -480,10 +485,14 @@ void Problem::Alfven(real_array &v, real_array &u){ // HOST CODE: Initializing
   dump(v); // Print ICs
   Log::cout() << TAG << "Initialized Problem Alfven in "<<stepTime_.lap() << Log::endl;
 }
+#endif
 
 void Problem::BlastWave(real_array &v, real_array &u){ // HOST CODE: Initializing
   real r0 = config.getOr("r0", 0.8);
-  real b0 = 1.0 / sycl::sqrt(2.0), rh0 = 1e-4, pg0 = 5e-3, rh1 = 1e-2, pg1 = 1.0;
+  real rh0 = 1e-4, pg0 = 5e-3, rh1 = 1e-2, pg1 = 1.0;
+#if PHYSICS == MHD || PHYSICS == GRMHD
+  real b0 = 1.0 / sycl::sqrt(2.0);
+#endif
   real bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
   Grid gr = *this->grid_;
 
@@ -499,9 +508,11 @@ void Problem::BlastWave(real_array &v, real_array &u){ // HOST CODE: Initializin
     v[VX][i] = 0.0;
     v[VY][i] = 0.0;
     v[VZ][i] = 0.0;
+#if PHYSICS == MHD || PHYSICS == GRMHD
     v[BX][i] = b0;
     v[BY][i] = b0;
     v[BZ][i] = 0.0;
+#endif
     v[RH][i] = rh0 + (rh1 - rh0) * f;
     v[PG][i] = pg0 + (pg1 - pg0) * f;
 
@@ -531,9 +542,11 @@ void Problem::Gradient(real_array &v, real_array &u){ // HOST CODE: Initializing
     v[VX][i] = 0.0;
     v[VY][i] = 0.0;
     v[VZ][i] = 0.0;
+#if PHYSICS == MHD || PHYSICS == GRMHD
     v[BX][i] = 0.0;
     v[BY][i] = 0.0;
     v[BZ][i] = 0.0;
+#endif
     v[RH][i] = rho;
     v[PG][i] = pg;
     id<3> id = it.get_id();
