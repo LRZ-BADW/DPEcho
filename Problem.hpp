@@ -41,7 +41,8 @@ class Problem {
     inline unsigned long iOut   (){return iOut_   ;}
     inline unsigned long iStep  (){return iStep_  ;}
     inline unsigned long nStep  (){return nStep_  ;}
-    inline unsigned long BOVRank(){return BOVRank_;}
+    inline unsigned long myRank(){return myRank_;}
+    inline real tolCons2Prim() const { return tolCons2Prim_; }
     // Output
     void dtUpdate(real);
     void dump( real_array &fld, Grid &gr, std::string dir, std::string name);
@@ -52,6 +53,9 @@ class Problem {
     };
     void waitOut();
     std::string getTimings() { return stepTime_.getTimings(); }
+
+    // Restart from a previous VTK dump
+    void restart(real_array &v, real_array &u, std::string restartDir);
 
     // Generic problem initializer -- calls specific inits based on config
     void init(real_array &v, real_array &u);
@@ -73,9 +77,9 @@ class Problem {
     sycl::queue qq;
     TB::Timer stepTime_;
     real tMax_, t_, dt_, cfl_, tOut_;
-    real *v_[FLD_TOT], *u_[FLD_TOT], dt_prev_;
+    real *v_[FLD_TOT], *u_[FLD_TOT], dt_prev_, tolCons2Prim_ = 1.e-9;
     unsigned int N_, nxNH_, nyNH_, nzNH_;
-    unsigned long BOVRank_;
+    unsigned long myRank_;
     unsigned long iOut_, iStep_, nStep_;
     Grid   *grid_;
     Domain *D_;

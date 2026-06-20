@@ -21,7 +21,7 @@
 
 //-- Fields: prim&cons
 SYCL_EXTERNAL void prim2cons(sycl::id<1> gid, unsigned n, real_array v, real_array u, Metric &m);
-SYCL_EXTERNAL void cons2prim(sycl::id<1> gid, unsigned n, real_array u, real_array v, Metric &m);
+SYCL_EXTERNAL void cons2prim(sycl::id<1> gid, unsigned n, real_array u, real_array v, Metric &m, real tol = 1.e-9);
 
 //-- Fluxes: here as they know about the metric
 SYCL_EXTERNAL void physicalFlux  (int dir, Metric &g, real vD[FLD_TOT], real uD[FLD_TOT], real f[FLD_TOT], real vf[2], real vt[2]);

@@ -36,11 +36,16 @@ int main(int argc, char** argv ) {
 
   //-- Logger
   std::string runName = param.getOr("runName", std::filesystem::path(parFile).stem().string());
-  std::time_t t = std::time(nullptr);
-  std::tm tm = *std::localtime(&t);
-  std::ostringstream ss;
-  ss << std::put_time(&tm, "%Y-%m-%dT%H%M_") << runName;
-  runName = ss.str();
+  std::string restartDir = param.getOr("restartDir", ""s);
+  if (!restartDir.empty()) {
+    runName = restartDir + "/" + runName;
+  } else {
+    std::time_t t = std::time(nullptr);
+    std::tm tm = *std::localtime(&t);
+    std::ostringstream ss;
+    ss << std::put_time(&tm, "%Y-%m-%dT%H%M_") << runName;
+    runName = ss.str();
+  }
   int clogVerbosity = param.getOr("clogVerb", 4);
   int coutVerbosity = param.getOr("coutVerb", 4);
   std::string logfileName = param.getOr("clogName", "log"s);
@@ -103,7 +108,11 @@ int main(int argc, char** argv ) {
   //-- Problem
   real dtLoc; // local copy of time, for ease of capture
   Problem problem(qDev, param, &grid, DD, out, runName);
-  problem.init(v, u);  // Inits v and u in DEVICE based on param scenario, calls BCex, prints ICs.
+  if (!restartDir.empty()) {
+    problem.restart(v, u, restartDir);
+  } else {
+    problem.init(v, u);  // Inits v and u in DEVICE based on param scenario, calls BCex, prints ICs.
+  }
 
   //-- SYCL ranges and related accessories
   range<3> rStd  = range(grid.n[0], grid.n[1], grid.n[2]);
@@ -194,17 +203,20 @@ int main(int argc, char** argv ) {
         qDev.wait_and_throw();
       }
 
-      qDev.parallel_for<class parForRK>(rStd, [=](item<3> it) { //-- Updating RK
-        id<3> id = it.get_id();
-        range<3> ar = it.get_range();
-        if (isOutOfBounds(id, rStd)){ return; }
-        int myId = globLinId(it.get_id(), grid.nh, grid.h ); // Accessing v, u and the like
-        for (int i=0; i<FLD_TOT; ++i)
-          u[i][myId] = crk1[irk] * u0[i][myId] + crk2[irk]*( u[i][myId] - dtLoc*du[i][myId] );
-        u[RH][myId] = sycl::max(u[RH][myId], (real)RHOFLOOR);
-        Metric g(grid.xC(id, 0), grid.xC(id, 1), grid.xC(id, 2));
-        cons2prim(myId, Ncell, u, v, g);
-      }).wait_and_throw();
+      {
+        real c2pTol = problem.tolCons2Prim(); // tighter after restart
+        qDev.parallel_for<class parForRK>(rStd, [=](item<3> it) { //-- Updating RK
+          id<3> id = it.get_id();
+          range<3> ar = it.get_range();
+          if (isOutOfBounds(id, rStd)){ return; }
+          int myId = globLinId(it.get_id(), grid.nh, grid.h ); // Accessing v, u and the like
+          for (int i=0; i<FLD_TOT; ++i)
+            u[i][myId] = crk1[irk] * u0[i][myId] + crk2[irk]*( u[i][myId] - dtLoc*du[i][myId] );
+          u[RH][myId] = sycl::max(u[RH][myId], (real)RHOFLOOR);
+          Metric g(grid.xC(id, 0), grid.xC(id, 1), grid.xC(id, 2));
+          cons2prim(myId, Ncell, u, v, g, c2pTol);
+        }).wait_and_throw();
+      }
 
       for(unsigned myDir=0; myDir<NDIM; myDir++) { DD->BCex(myDir, grid, v); }
 

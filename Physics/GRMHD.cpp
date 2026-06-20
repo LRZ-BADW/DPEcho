@@ -37,7 +37,7 @@ SYCL_EXTERNAL void prim2cons(id<1> myId, unsigned n, real_array v, real_array u,
   for(unsigned short iFld=0; iFld<FLD_TOT; ++iFld){ u[iFld][gid] *= gDet; }
 }
 
-SYCL_EXTERNAL void cons2prim(id<1> myId, unsigned n, real_array u, real_array v, Metric &g){
+SYCL_EXTERNAL void cons2prim(id<1> myId, unsigned n, real_array u, real_array v, Metric &g, real tol){
   unsigned const gid = myId[0];
   real const gDet1 = g.gDet1();
   real sCov[3]={u[VX][gid]*gDet1,u[VY][gid]*gDet1,u[VZ][gid]*gDet1},  sCon[3];  g.cov2Con(sCov, sCon);  real s2=dot(sCov, sCon);
@@ -50,7 +50,7 @@ SYCL_EXTERNAL void cons2prim(id<1> myId, unsigned n, real_array u, real_array v,
   w1 = sycl::max( (2.*com+sycl::sqrt(sycl::max(w1,0.)))/3.-d, 0.);
 
   //-- Undetermined iteration. ALL LOCAL, luckily
-  real w, vv2, pg, fw, dv2, dpg, dfw, dw1; const real tol=1.e-9;
+  real w, vv2, pg, fw, dv2, dpg, dfw, dw1;
   for(unsigned iter=0; iter<20; ++iter){
     w  = w1+d;  vv2 = w*w*s2+(2.*w+b2)*sb2;   com = w*(w+b2);  u2 = sycl::max(vv2/(com*com-vv2), (real)0.0); glf = sycl::sqrt(1.+u2);
     pg = (w1-d*u2/(1.+glf))/(GAMMA1*glf*glf); com = w+b2;      fw = w1-et1-pg + .5*(b2 + b2st2/(com*com));

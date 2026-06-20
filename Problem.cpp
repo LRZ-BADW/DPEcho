@@ -15,8 +15,11 @@
 #include "Solver.hpp"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
+#include <fstream>
 #include <iomanip>
 #include <ios>
+#include <vector>
 
 using namespace std;
 using namespace sycl;
@@ -35,10 +38,10 @@ Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, rea
   Log::Assert(fld != NULL, "Allocate var and assign fld before initializing the problem.");
   out = fld;
   Log::cout(6) << TAG << "Problem framework of size " << N_ << " and output dir created." << Log::endl;
-  // Option to chenge the order of BOV output for the various MPI ranks. E.g. a z-first approach is:
-  // BOVRank_=D_->cartCoords(2)+( D_->cartCoords(1)+D_->cartCoords(0)*D_->cartDims(1) )*D_->cartDims(2);
-  // One could think of coding the z-first/x-first option it in CMake.
-  BOVRank_ = Log::mpiRank(); // x-first
+  // Rank ordering: x-first by default. A z-first approach would be:
+  // myRank_=D_->cartCoords(2)+( D_->cartCoords(1)+D_->cartCoords(0)*D_->cartDims(1) )*D_->cartDims(2);
+  // One could think of coding the option in CMake.
+  myRank_ = Log::mpiRank(); // x-first
   // TASKS  CELL TIME SPEC ABS
   Log::cerr(8)<<"TASKS\t CELLS\t TIME\t SPEC \t ABS"<<Log::endl;
 }
@@ -63,7 +66,7 @@ void Problem::dtUpdate(real aMax){
 
   t_ += dt_;
   //-- ACHTUNG!! Here and only here we are resetting the step timer!
-  double wallT_ = stepTime_.lap(false, true, BOVRank_); stepTime_.init();
+  double wallT_ = stepTime_.lap(false, true, myRank_); stepTime_.init();
   
   // Print on the main out for advancement
   Log::cout(0)<<TAG<<" Step # "<<iStep_<<": t "<<t_<<" i.e. "<<(t_/tMax_ * 100.0)<<"% dt "<<dt_<<" walltime/s "<<wallT_<<Log::endl;
@@ -130,6 +133,14 @@ void Problem::writeVTKAsync(Grid &gr, std::string dir, std::string name) {
         << "\" format=\"appended\" offset=\"" << off << "\"/>\n";
   }
   hdr << "      </CellData>\n";
+  hdr << "      <FieldData>\n";
+  hdr << std::setprecision(16) << std::scientific;
+  hdr << "        <DataArray type=\"" << VTK_REAL << "\" Name=\"t\" format=\"ascii\" numberOfTuples=\"1\">" << t_ << "</DataArray>\n";
+  hdr << "        <DataArray type=\"" << VTK_REAL << "\" Name=\"dt\" format=\"ascii\" numberOfTuples=\"1\">" << dt_ << "</DataArray>\n";
+  hdr << std::defaultfloat;
+  hdr << "        <DataArray type=\"UInt32\" Name=\"iStep\" format=\"ascii\" numberOfTuples=\"1\">" << iStep_ << "</DataArray>\n";
+  hdr << "        <DataArray type=\"UInt32\" Name=\"iOut\" format=\"ascii\" numberOfTuples=\"1\">" << iOut_ << "</DataArray>\n";
+  hdr << "      </FieldData>\n";
   hdr << "    </Piece>\n";
   hdr << "  </ImageData>\n";
   hdr << "  <AppendedData encoding=\"raw\">\n";
@@ -150,7 +161,7 @@ void Problem::writeVTKAsync(Grid &gr, std::string dir, std::string name) {
   // Open .vti, write header sync, start async write of packed binary
   std::ostringstream vtiName;
   vtiName << stepDir.str() << "/rank_"
-          << std::setw(4) << std::setfill('0') << BOVRank_ << ".vti";
+          << std::setw(4) << std::setfill('0') << myRank_ << ".vti";
   MPI_File_open(MPI_COMM_SELF, vtiName.str().c_str(),
                 MPI_MODE_CREATE | MPI_MODE_WRONLY, MPI_INFO_NULL, &outFh);
   MPI_File_write(outFh, header.data(), header.size(), MPI_BYTE, MPI_STATUS_IGNORE);
@@ -251,6 +262,96 @@ void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
     prevDir_ = dir; prevName_ = name; prevOut_ = iOut_; prevValid_ = true;
   }
   iOut_++;
+}
+
+void Problem::restart(real_array &v, real_array &u, std::string restartDir) {
+  int restartStep = config.getOr("restartStep", -1);
+  Log::Assert(restartStep >= 0, "restartStep must be >= 0 for restart");
+  Log::Assert(out != nullptr, "Output array was not initialized.");
+
+  int Lx = grid_->n[0], Ly = grid_->n[1], Lz = grid_->n[2];
+  int Ntot = Lx * Ly * Lz;
+  size_t perVarData = static_cast<size_t>(Ntot) * sizeof(real);
+  size_t varBlkBytes = sizeof(uint32_t) + perVarData;
+
+  std::ostringstream fpath;
+  fpath << restartDir << "/dump/" << std::setw(4) << std::setfill('0') << restartStep
+        << "/rank_" << std::setw(4) << std::setfill('0') << myRank_ << ".vti";
+  std::string fname = fpath.str();
+
+  std::ifstream f(fname, std::ios::binary);
+  Log::Assert(f.good(), "restart: cannot open " + fname);
+  std::vector<char> content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+  f.close();
+  std::string s(content.data(), content.size());
+
+  // Parse inline FieldData from XML header
+  auto fieldVal = [&](const char* name) -> std::string {
+    std::string pat = "Name=\"" + std::string(name) + "\" format=\"ascii\" numberOfTuples=\"1\">";
+    auto p = s.find(pat);
+    if (p == std::string::npos) return "";
+    p += pat.size();
+    auto e = s.find("</DataArray>", p);
+    return (e == std::string::npos) ? "" : s.substr(p, e - p);
+  };
+
+  std::string tStr = fieldVal("t"), dtStr = fieldVal("dt");
+  std::string iStepStr = fieldVal("iStep"), iOutStr = fieldVal("iOut");
+  Log::Assert(!tStr.empty() && !iStepStr.empty(), "restart: missing FieldData metadata in " + fname);
+
+  t_     = std::stod(tStr);
+  dt_    = dtStr.empty() ? 0.0 : std::stod(dtStr);
+  dt_prev_ = dt_; // Previous timestep for growth limiter
+  iStep_ = std::stoul(iStepStr);
+  iOut_  = iOutStr.empty() ? 0UL : std::stoul(iOutStr) + 1; // Next dump after the one we loaded
+  tolCons2Prim_ = 1.e-12; // Tighter tolerance after restart to reduce roundtrip error
+
+  for (int i = 0; i < FLD_TOT; ++i) { v_[i] = v[i]; u_[i] = u[i]; }
+
+  // Find appended binary start
+  auto atag = s.find("<AppendedData encoding=\"raw\">");
+  Log::Assert(atag != std::string::npos, "restart: missing AppendedData tag");
+  auto us = s.find('_', atag);
+  Log::Assert(us != std::string::npos, "restart: missing binary marker '_'");
+  const char* binStart = content.data() + us + 1;
+
+  // Host-side de-interleave: VTK order (x fastest, NH) -> WH-indexed device
+  real* vtbuf = new real[Ntot];
+  for (int vi = 0; vi < FLD_TOT; vi++) {
+    const char* varBlk = binStart + vi * varBlkBytes;
+    std::memcpy(vtbuf, varBlk + sizeof(uint32_t), perVarData);
+    real* vDev = v[vi];
+    qq.parallel_for(range(Lx, Ly, Lz), [=, gr = *(this->grid_)](item<3> it) {
+      auto id = it.get_id();
+      int iVtk = id[0] + id[1] * Lx + id[2] * Lx * Ly;
+      auto iV = globLinId(id, gr.nh, gr.h);
+      vDev[iV] = vtbuf[iVtk];
+    });
+    qq.wait_and_throw();
+  }
+  delete[] vtbuf;
+
+  // Compute conserved variables from restored primitives
+  {
+    real c2pTol = tolCons2Prim_;
+    qq.parallel_for(range(Lx, Ly, Lz), [=, gr = *(this->grid_)](item<3> it) {
+      auto i = globLinId(it, gr.nh, gr.h);
+      id<3> id = it.get_id();
+      Metric g(gr.xC(id, 0), gr.xC(id, 1), gr.xC(id, 2));
+      prim2cons(i, gr.nht, v, u, g);
+      cons2prim(i, gr.nht, u, v, g, c2pTol);
+    }).wait_and_throw();
+  }
+
+  D_->BCex(2, *grid_, v);
+  D_->BCex(1, *grid_, v);
+  D_->BCex(0, *grid_, v);
+
+  outPending = false;
+  prevValid_ = false;
+
+  Log::cout(0) << TAG << "Restarted from dump " << restartStep
+               << " (t=" << t_ << ", dt=" << dt_ << ", iStep=" << iStep_ << ", iOut=" << iOut_ << ")" << Log::endl;
 }
 
 void Problem::InitConstWH(real *v, real val) { // HOST CODE: kernel for initialization.
