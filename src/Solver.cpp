@@ -69,27 +69,33 @@ SYCL_EXTERNAL inline real mm4(real d1, real d2, real d3, real d4) {
 					  sycl::fmin(sycl::fabs(d3), sycl::fabs(d4)) );
 }
 
+//-- Slow path of mp5: extracts the rare "hard" case so the fast path stays lean.
+//   Marked noinline to keep register pressure out of the hot reconstruction loop.
+static __attribute__((noinline)) real mp5_slow(real f, real f2, real f3, real f4,
+                                              real ful, real dm, real d0, real dp) {
+  real fmd = .5*(f3+f4)-.5*mm4(4*d0-dp,4*dp-d0,d0,dp);
+  real flc = f3+.5*(f3-f2)+(4./3.)*mm4(4*d0-dm,4*dm-d0,d0,dm);
+  real myfmin = sycl::fmax( sycl::fmin(f3, sycl::fmin(f4,fmd)), sycl::fmin(f3, sycl::fmin(ful,flc)) );
+  real myfmax = sycl::fmin( sycl::fmax(sycl::fmax(f3,f4), fmd), sycl::fmax(sycl::fmax(f3,ful), flc) );
+  return f + mm2(myfmin-f, myfmax-f);
+}
+
 SYCL_EXTERNAL inline real mp5(real f, real f1, real f2, real f3, real f4, real f5) {
 //  See also: Pizzarelli, Marco and Ahn, Myeong-Hwan and Lee, Duck-Joo, 2019
 //    Hybrid Flux Method in Monotonicity-Preserving Scheme for Accurate and Robust Simulation in Supersonic Flow
 //    https://doi.org/10.1155/2019/4590956
-  real ful, fmp, dm, d0, dp, fmd, flc, myfmin, myfmax;
-  real res = f;
+  // real res = f; // unused
 
-  ful = f3 + 2 * (f3 - f2);
-  fmp = f3 + mm2(f4 - f3, ful - f3);
+  real ful = f3 + 2 * (f3 - f2);
+  real fmp = f3 + mm2(f4 - f3, ful - f3);
   if ((f - f3) * (f - fmp) <= 0.0) {
     return f;
-  } else {
-    dm = f1-2*f2+f3;
-    d0 = f2-2*f3+f4;
-    dp = f3-2*f4+f5;
-    fmd = .5*(f3+f4)-.5*mm4(4*d0-dp,4*dp-d0,d0,dp);
-    flc = f3+.5*(f3-f2)+(4./3.)*mm4(4*d0-dm,4*dm-d0,d0,dm);
-    myfmin = sycl::fmax( sycl::fmin(f3, sycl::fmin(f4,fmd)), sycl::fmin(f3, sycl::fmin(ful,flc)) );
-    myfmax = sycl::fmin( sycl::fmax(sycl::fmax(f3,f4), fmd), sycl::fmax(sycl::fmax(f3,ful), flc) );
-    return f + mm2(myfmin-f, myfmax-f);
   }
+
+  real dm = f1-2*f2+f3;
+  real d0 = f2-2*f3+f4;
+  real dp = f3-2*f4+f5;
+  return mp5_slow(f, f2, f3, f4, ful, dm, d0, dp);
 }
 
 //-- Reconstruction at (i +/- 1/2)
