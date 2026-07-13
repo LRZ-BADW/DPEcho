@@ -21,6 +21,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <iomanip>
 
 std::ofstream Log::logFile;
 int Log::coutVerbosity;
@@ -124,6 +125,12 @@ void Log::logo(){
               <<"  / / / // /_/ // __/  / ___// __ \\ / __ \\\n"
               <<" / /_/ // ____// /___ / /__ / / / // /_/ /  \n"
               <<"/_____//_/    /_____/ \\___//_/ /_/ \\____/ \n"<<Log::endl;
+}
+
+void Log::cups(TB::Timer &timer, const char *name, unsigned ncells) {
+  clog(0) << "\t kTimer [CUPs] " << name
+          << std::scientific << std::setprecision(6)
+          << (double)ncells/timer.lap(false) << endl;
 }
 
 

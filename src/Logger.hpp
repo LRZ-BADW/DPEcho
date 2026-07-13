@@ -75,6 +75,7 @@ class Log {
   static void Assert(bool condition, std::string message);
   static const std::string getTag(std::string const val);
   static void togglePcontrol(int onOff);
+  static void cups(TB::Timer &timer, const char *name, unsigned ncells);
 
   // MPI Helpers (avoid some ifdefs)
   static int mpiSize();
