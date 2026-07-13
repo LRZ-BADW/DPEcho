@@ -70,7 +70,7 @@ int main(int argc, char** argv ) {
   Metric::setParameters(bha, bhm, bhc);   // Only relevant for non-Cartesian metrics, otherwise, no-op.
 
   //-- SYCL device selection
-  Device dc; // automation inside Deviceparam
+  Device dc;
   sycl::queue qDev(dc.deviceWith(param));
   const size_t  gMax = qDev.get_device().get_info<sycl::info::device::max_work_group_size>();
   const size_t wgMax = param.getOr<int>("wgMax", 4); // Safe and performant default, tune at will.
@@ -125,7 +125,6 @@ int main(int argc, char** argv ) {
       if (!irk){ aMax[0]=0.0; aMax[1]=0.0; aMax[2]=0.0; }
 
       for(unsigned myDir=0; myDir<NDIM; myDir++){ // Direction loop
-        //range<3> rLoc(gridF[myDir].groupSize[0], gridF[myDir].groupSize[1], gridF[myDir].groupSize[2]);
         auto maxReduction = sycl::reduction(aMax + myDir, sycl::maximum<real>());
 
         //-- Flux kernel (PoV of f[])

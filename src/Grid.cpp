@@ -20,13 +20,6 @@ Grid::Grid( int nx, int ny, int nz, int hx, int hy, int hz, real xmin, real xmax
   dx  {(xmax-xmin)/((real)nx), (ymax-ymin)/((real)ny), (zmax-zmin)/((real)nz)},
   hMin{ xmin-hx*dx[0], ymin-hy*dx[1], zmin-hz*dx[2]},
   hMax{ xmax+hx*dx[0], ymax+hy*dx[1], zmax+hz*dx[2]}{
-  // This is a memorial for a nice algo :)
-  /*
-  while(gMax%wgMax){wgMax--;}
-  groupSize[2] = std::gcd(gMax                          , n[2]); groupSize[2] = std::min(groupSize[2],wgMax);
-  groupSize[1] = std::gcd(gMax/groupSize[2]             , n[1]); groupSize[1] = std::min(groupSize[1],wgMax);
-  groupSize[0] = std::gcd(gMax/groupSize[2]/groupSize[1], n[0]); groupSize[0] = std::min(groupSize[0],wgMax);
-  */
 }
 
 //-- Infos

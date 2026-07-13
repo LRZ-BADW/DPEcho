@@ -129,7 +129,7 @@ namespace TB {
       	      stepMean[l] += curRes / totalRanks;
   	        }
       	  // And dump them to as a nicely formatted table.
-      	  buf<<"\nMPI Load Imbance\n";
+      	  buf<<"\nMPI Load Imbalance\n";
             buf<<std::setw(6)<<"\t" <<"Step"<<"\t" <<std::setw(10)<<"Avg_Time/s"
                <<"\t" <<std::setw(10)<<"Min_Time_%"<<"\t"<<std::setw(10)<<"Min_Rank"
                <<"\t" <<std::setw(10)<<"Max_Time_%"<<"\t"<<std::setw(10)<<"Max_Rank"<<std::endl;

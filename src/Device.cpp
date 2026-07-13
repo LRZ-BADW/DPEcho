@@ -10,6 +10,7 @@
 
 #include "Device.hpp"
 #include "Logger.hpp"
+#include <cmath>
 #include <sstream>
 
 using namespace sycl;
@@ -28,8 +29,6 @@ Device::Device() {
 #elif DEVICE==DEV_GPU
   #define SELECTOR sycl::gpu_selector_v
 #elif DEVICE==DEV_ACC
-  #define SELECTOR sycl::accelerator_selector_v
-#elif DEVICE==DEV_FPGA
   #define SELECTOR sycl::accelerator_selector_v
 #else
   #define SELECTOR sycl::default_selector_v

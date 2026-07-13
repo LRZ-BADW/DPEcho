@@ -61,7 +61,7 @@ Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param) {
     neighCoords[i] = cartCoords_[i]-1;  MPI_Cart_rank(cartComm_, neighCoords, neighRankPrev_+i);
     neighCoords[i] = cartCoords_[i]+1;  MPI_Cart_rank(cartComm_, neighCoords, neighRankNext_+i);
   }
-  //-- Initialize phisical (local!) dimensions
+  //-- Initialize physical (local!) dimensions
   for(unsigned short i=0; i<NDIM; ++i){
     locSize_[i] = boxSize_[i]/cartDims_[i]; locMin_[i] = boxMin_[i]+locSize_[i]*cartCoords_[i]; locMax_[i] = locMin_[i]+locSize_[i];
   }
@@ -106,7 +106,7 @@ void Domain::locInfo() {
 }
 
 // Variables are passed, so any array can be used.
-// ACHTUNG:
+  // WARNING:
 //  - It always assumes periodic, w or w/o MPI. At the end it will take care of other BCs.
 void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the usual local grid.
 

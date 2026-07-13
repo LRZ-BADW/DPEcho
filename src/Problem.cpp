@@ -14,7 +14,7 @@
 #include "Physics.hpp"
 #include "Solver.hpp"
 #include <algorithm>
-#include <cstdio>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <iomanip>
@@ -65,7 +65,7 @@ void Problem::dtUpdate(real aMax){
   dt_prev_ = dt_;
 
   t_ += dt_;
-  //-- ACHTUNG!! Here and only here we are resetting the step timer!
+  //-- WARNING: Here and only here we are resetting the step timer!
   double wallT_ = stepTime_.lap(false, true, myRank_); stepTime_.init();
   
   // Print on the main out for advancement

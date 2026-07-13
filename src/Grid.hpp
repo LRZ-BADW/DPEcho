@@ -16,7 +16,6 @@
 #include "echo.hpp"
 
 #include <sycl/sycl.hpp>
-#include <numeric>
 
 class Grid {
 
@@ -46,7 +45,7 @@ class Grid {
 
 //-- General Indexing methods (work for any SYCL range, not just the grid!)
 // Call in parallel_for. Calculate most general linear index to access arrays
-// Offset can be positive or negative. Positve -> target array starts before parallel_for range.
+// Offset can be positive or negative. Positive -> target array starts before parallel_for range.
 
 // This version uses sycl::ids for the offset calculation.
 inline size_t globLinId(sycl::id<3> const baseId, sycl::range<3> const r, sycl::id<3> const offset) {

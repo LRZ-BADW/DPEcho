@@ -12,7 +12,6 @@
 #define _echo_hpp_
 
 #define _USE_MATH_DEFINES
-#define MAX(x,y) ((x>y)?x:y)
 
 #define NDIM 3
 
@@ -59,7 +58,6 @@
 #define BCPER 1 // Periodic
 #define BCOF0 2 // Outflow w 0th order interpolation
 #define BCOF3 3 // Outflow w 3rd order interpolation
-#define BCUNK 5 // Unknown
 
 //-- EoS
 #define GAMMA 1.3333
@@ -87,6 +85,6 @@
 #define REC_TOTAL_POINTS 1
 #endif
 
-#define NGC MAX( (FD/2)+1,(REC_RIGHT_OFFSET)+1 )
+#define NGC (((FD/2)+1 > (REC_RIGHT_OFFSET)+1) ? (FD/2)+1 : (REC_RIGHT_OFFSET)+1)
 
 #endif
