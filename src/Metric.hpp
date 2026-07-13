@@ -79,4 +79,67 @@ inline real Metric::bha = static_cast<real>(0);
 inline real Metric::bhc = static_cast<real>(0);
 #endif
 
+// --- Inline metric implementations (cross-TU inlining on host, device compilation from header)
+#if METRIC == CARTESIAN
+inline real Metric::gDet   (){ return 1.0; }
+inline real Metric::gDet1  (){ return 1.0; }
+inline real Metric::alpha  (){ return 1.0; }
+inline real Metric::betai  (unsigned short i){ return 0; }
+inline real Metric::gCon   (unsigned short i, unsigned short j){ return (i==j) ? 1.0 : 0.0; }
+inline real Metric::gCov   (unsigned short i, unsigned short j){ return (i==j) ? 1.0 : 0.0; }
+inline real Metric::dgAlpha(unsigned short i) { return 0.0; }
+inline real Metric::dgBeta (unsigned short i, unsigned short j) { return 0.0; }
+inline real Metric::dgCov  (unsigned short i, unsigned short j, unsigned short k) { return 0.0; }
+#elif METRIC == KERR_SCHILD
+inline real Metric::gDet   (){ return sycl::sqrt(rho2*det*sint2); }
+inline real Metric::gDet1  (){ return (sint<=1.e-6) ? 0.0 : sycl::rsqrt(rho2*det*sint2); }
+inline real Metric::alpha  (){ return sycl::rsqrt(1.+zz); }
+inline real Metric::betai  (unsigned short i){ return (0==i) ? (zz/(1.+zz)) : 0.0; }
+inline real Metric::gCon   (unsigned short i, unsigned short j){
+  switch(i*10+j){
+    case  0: return 1.0 + zz;
+    case 11: return rho2;
+    case 22: return (sigma/rho2)*sint2;
+    case  2: case 20: return -a*(1.+zz)*sint2;
+    default: return 0.0;
+  }
+}
+inline real Metric::gCov   (unsigned short i, unsigned short j){
+  switch(i*10+j){
+    case  0: return (sigma/rho2)/det;
+    case 11: return    1.0/rho2;
+    case 22: return (sint<=1.e-6) ? 0.0 : (1.0+zz)/(det*sint2);
+    case  2: case 20: return a*(1.0+zz)/det;
+    default: return 0.0;
+  }
+}
+inline real Metric::dgAlpha(unsigned short i) {
+  switch(i){
+    case  0: return  alpha()*.5*zz/(1.0+zz)*dxlogzz;
+    case  1: return -alpha()*.5*zz/(1.0+zz)*dylogzz;
+    default: return  0.0;
+  }
+}
+inline real Metric::dgBeta (unsigned short i, unsigned short j) {
+  switch(i*10+j){
+    case  0: return  zz/(1+zz)/(1.+zz)*dxlogzz;
+    case  1: return  zz/(1+zz)/(1.+zz)*dylogzz;
+    default: return  0.0;
+  }
+}
+inline real Metric::dgCov  (unsigned short i, unsigned short j, unsigned short k) {
+  switch(i*100+j*10+k){
+    case   0: return  zz*dxlogzz;
+    case 110: return  gCov(1,1)* dxlogrho2;
+    case 220: return  gCov(2,2)*(dxlogsigma-dxlogrho2);
+    case  20: case 200: return  gCov(0,2)*zz/(1+zz)*dxlogzz;
+    case   1: return zz*dylogzz;
+    case 111: return gCov(1,1) * dylogrho2;
+    case 221: return gCov(2,2) *(dylogsigma-dylogrho2+2*cost/sint);
+    case  21: case 201: return gCov(0,2)*(zz/(1.0+zz)*dylogzz+2*cost/sint);
+    default : return  0.0;
+  }
+}
+#endif
+
 #endif

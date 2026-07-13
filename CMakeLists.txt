@@ -31,9 +31,13 @@ target_include_directories(dpecho PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
 
 # -- Build
-set(MYBUILDTYPE Release Debug RelWithDebInfo MinSizeRel)
+set(MYBUILDTYPE Release Debug RelWithDebInfo MinSizeRel OptReport)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build")
 set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${MYBUILDTYPE})
+
+# Custom build type: Release + Intel optimization report
+set(CMAKE_CXX_FLAGS_OPTREPORT "-O3 -DNDEBUG -qopt-report=4 -Rpass=loop-vectorize -Rpass-missed=loop-vectorize"
+    CACHE STRING "Flags for OptReport build type" FORCE)
 
 # TODO
 # Missing:
