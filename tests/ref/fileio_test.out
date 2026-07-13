@@ -1,0 +1,39 @@
+    ____   ____   ______       __           
+   / __ \ / __ \ / ____/_____ / /_   ____ 
+  / / / // /_/ // __/  / ___// __ \ / __ \
+ / /_/ // ____// /___ / /__ / / / // /_/ /  
+/_____//_/    /_____/ \___//_/ /_/ \____/ 
+
+[main] Grid size: Mx: 32, My: 32, Mz: 32
+[Domain::cartInfo] 3D Domain: 1 1 1
+[Domain::boxInfo] Box  size (1 1 1) From (-0.5 -0.5 -0.5) To (0.5 0.5 0.5)
+[Grid::print]  halos_(4 4 4)   cellsWH(40 40 40)   cellsNH(32 32 32)   Dxyz(0.03125 0.03125 0.03125)  
+[Grid::print]  halos_(2 0 0)   cellsWH(37 32 32)   cellsNH(33 32 32)   Dxyz(0.030303 0.03125 0.03125)  
+[Grid::print]  halos_(0 2 0)   cellsWH(32 37 32)   cellsNH(32 33 32)   Dxyz(0.03125 0.030303 0.03125)  
+[Grid::print]  halos_(0 0 2)   cellsWH(32 32 37)   cellsNH(32 32 33)   Dxyz(0.03125 0.03125 0.030303)  
+[Problem::Alfven] kxyz 6.28319 6.28319 6.28319
+[Problem::Alfven] tMax  is set to 1.51152
+[Problem::Alfven] alp bet gam va 0.785398 0.785398 0.61548 0.381966
+[Problem::writeVTKAsync] Dumped 2026-07-13T1629_grmhd_fileio/dump (2026-07-13T1629_grmhd_fileio) output #0
+[Problem::Alfven] Initialized Problem Alfven in 6.3443
+[Problem::dtUpdate]  Step # 0: t 0.0102467 i.e. 0.677909% dt 0.0102467 walltime/s 8.60252
+[Problem::dtUpdate]  Step # 1: t 0.0204884 i.e. 1.35548% dt 0.0102417 walltime/s 0.0575056
+[Problem::dtUpdate]  Step # 2: t 0.0307246 i.e. 2.03269% dt 0.0102362 walltime/s 0.0503397
+[Problem::dtUpdate]  Step # 3: t 0.0409543 i.e. 2.70947% dt 0.0102296 walltime/s 0.0508033
+[Problem::dtUpdate]  Step # 4: t 0.05118 i.e. 3.38599% dt 0.0102258 walltime/s 0.0497308
+
+MPI Load Imbance
+     	Step	Avg_Time/s	Min_Time_%	  Min_Rank	Max_Time_%	  Max_Rank
+     	0	    6.3443	         0	         0	         0	         0
+     	1	   8.60251	         0	         0	         0	         0
+     	2	 0.0575015	         0	         0	         0	         0
+     	3	 0.0503357	         0	         0	         0	         0
+     	4	 0.0507994	         0	         0	         0	         0
+     	5	 0.0497274	         0	         0	         0	         0
+
+{
+
+	"rank0": [6.3443, 8.60251, 0.0575015, 0.0503357, 0.0507994, 0.0497274]
+}
+
+[void Log::finalize] Total runtime [s]: 8.93255

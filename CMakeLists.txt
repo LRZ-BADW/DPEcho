@@ -16,12 +16,12 @@ project( DPEcho
 )
 
 add_executable (dpecho
-  echo.cpp Logger.cpp Grid.cpp Domain.cpp Problem.cpp Metric.cpp Solver.cpp Device.cpp Parameters.cpp
-  $<$<STREQUAL:${PHYSICS},MHD>:Physics/MHD.cpp>
-  $<$<STREQUAL:${PHYSICS},GRMHD>:Physics/GRMHD.cpp>
-  $<$<STREQUAL:${PHYSICS},HD>:Physics/HD.cpp>
-  $<$<STREQUAL:${PHYSICS},GRHD>:Physics/GRHD.cpp>
-  echo.hpp Logger.hpp Grid.hpp Domain.hpp Problem.hpp Physics.hpp Metric.hpp Solver.hpp Device.hpp Parameters.hpp
+  src/echo.cpp src/Logger.cpp src/Grid.cpp src/Domain.cpp src/Problem.cpp src/Metric.cpp src/Solver.cpp src/Device.cpp src/Parameters.cpp
+  $<$<STREQUAL:${PHYSICS},MHD>:src/Physics/MHD.cpp>
+  $<$<STREQUAL:${PHYSICS},GRMHD>:src/Physics/GRMHD.cpp>
+  $<$<STREQUAL:${PHYSICS},HD>:src/Physics/HD.cpp>
+  $<$<STREQUAL:${PHYSICS},GRHD>:src/Physics/GRHD.cpp>
+  src/echo.hpp src/Logger.hpp src/Grid.hpp src/Domain.hpp src/Problem.hpp src/Physics.hpp src/Metric.hpp src/Solver.hpp src/Device.hpp src/Parameters.hpp
 )
 set_target_properties(dpecho PROPERTIES OUTPUT_NAME "dpecho")
 set_property(TARGET dpecho PROPERTY CXX_STANDARD 17)
@@ -128,10 +128,6 @@ set(SYCL_DEVICE GPU CACHE STRING "Select the primary SYCL device (default/CPU/GP
 set(MYDEVICE DEF CPU GPU ACC FPGA)
 set_property(CACHE SYCL_DEVICE PROPERTY STRINGS ${MYDEVICE})
 target_compile_definitions(dpecho PRIVATE DEVICE=DEV_${SYCL_DEVICE})
-if(NOT SYCL_DEVICE STREQUAL DEF )
-  string(TOLOWER ${SYCL_DEVICE} DEVSUFFIX)
-  set(SUFFIX "${SUFFIX}_${DEVSUFFIX}")
-endif()
 
 # -- Compiling
 option(ENABLE_MEMORY_SANITATION "Enable memory sanitizer to find and track invalid memory accesses. Currently disabled." OFF)
@@ -207,13 +203,7 @@ set(PHYSTYPE MHD GRMHD HD GRHD)
 set(PHYSICS GRMHD CACHE STRING "Choose Physics Solver")
 set_property(CACHE PHYSICS PROPERTY STRINGS ${PHYSTYPE})
 target_compile_definitions(dpecho PUBLIC PHYSICS=${PHYSICS})
-if (PHYSICS STREQUAL GRMHD)
-  set(SUFFIX ${SUFFIX}_gr)
-elseif (PHYSICS STREQUAL HD)
-  set(SUFFIX ${SUFFIX}_hd)
-elseif (PHYSICS STREQUAL GRHD)
-  set(SUFFIX ${SUFFIX}_grhd)
-endif()
+string(TOLOWER ${PHYSICS} _phys_suffix)
 
 ##-- Executable name
-set_target_properties(dpecho PROPERTIES OUTPUT_NAME "dpecho${SUFFIX}")
+set_target_properties(dpecho PROPERTIES OUTPUT_NAME "dpecho_${_phys_suffix}")

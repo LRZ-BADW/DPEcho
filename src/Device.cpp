@@ -21,7 +21,9 @@ Device::Device() {
 }
 
 
-#if   DEVICE==DEV_CPU
+#if   DEVICE==DEV_DEF
+  #define SELECTOR sycl::default_selector_v
+#elif DEVICE==DEV_CPU
   #define SELECTOR sycl::cpu_selector_v
 #elif DEVICE==DEV_GPU
   #define SELECTOR sycl::gpu_selector_v

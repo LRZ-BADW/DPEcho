@@ -1,0 +1,36 @@
+    ____   ____   ______       __           
+   / __ \ / __ \ / ____/_____ / /_   ____ 
+  / / / // /_/ // __/  / ___// __ \ / __ \
+ / /_/ // ____// /___ / /__ / / / // /_/ /  
+/_____//_/    /_____/ \___//_/ /_/ \____/ 
+
+[main] Grid size: Mx: 32, My: 32, Mz: 32
+[Domain::cartInfo] 3D Domain: 1 1 1
+[Domain::boxInfo] Box  size (1 1 1) From (-0.5 -0.5 -0.5) To (0.5 0.5 0.5)
+[Grid::print]  halos_(4 4 4)   cellsWH(40 40 40)   cellsNH(32 32 32)   Dxyz(0.03125 0.03125 0.03125)  
+[Grid::print]  halos_(2 0 0)   cellsWH(37 32 32)   cellsNH(33 32 32)   Dxyz(0.030303 0.03125 0.03125)  
+[Grid::print]  halos_(0 2 0)   cellsWH(32 37 32)   cellsNH(32 33 32)   Dxyz(0.03125 0.030303 0.03125)  
+[Grid::print]  halos_(0 0 2)   cellsWH(32 32 37)   cellsNH(32 32 33)   Dxyz(0.03125 0.03125 0.030303)  
+[Problem::Uniform] Initialized Problem Uniform.
+[Problem::Uniform] Initialized Problem Uniform in 3.91576
+[Problem::dtUpdate]  Step # 0: t 0.00454566 i.e. 0.454566% dt 0.00454566 walltime/s 5.547
+[Problem::dtUpdate]  Step # 1: t 0.00909132 i.e. 0.909132% dt 0.00454566 walltime/s 0.0355635
+[Problem::dtUpdate]  Step # 2: t 0.013637 i.e. 1.3637% dt 0.00454566 walltime/s 0.0375601
+[Problem::dtUpdate]  Step # 3: t 0.0181826 i.e. 1.81826% dt 0.00454566 walltime/s 0.0340005
+[Problem::dtUpdate]  Step # 4: t 0.0227283 i.e. 2.27283% dt 0.00454566 walltime/s 0.0340997
+
+MPI Load Imbance
+     	Step	Avg_Time/s	Min_Time_%	  Min_Rank	Max_Time_%	  Max_Rank
+     	0	   3.91576	         0	         0	         0	         0
+     	1	   5.54691	         0	         0	         0	         0
+     	2	  0.035559	         0	         0	         0	         0
+     	3	 0.0375566	         0	         0	         0	         0
+     	4	 0.0339969	         0	         0	         0	         0
+     	5	 0.0340962	         0	         0	         0	         0
+
+{
+
+	"rank0": [3.91576, 5.54691, 0.035559, 0.0375566, 0.0339969, 0.0340962]
+}
+
+[void Log::finalize] Total runtime [s]: 5.79005

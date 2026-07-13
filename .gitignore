@@ -6,3 +6,5 @@
 /out/
 /runs/
 /2026-*/
+/tests/out/
+/tests/build/
