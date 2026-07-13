@@ -30,7 +30,7 @@ mapfile -t mc_old < <(extract_mcups "$R_PERF"); mapfile -t mc_new < <(extract_mc
 nrows=${#dt_new[@]}; nmc=${#mc_old[@]}
 echo "Step    dt_ref              dt_now              mcups_ref            mcups_now"
 echo "────    ────                ────                ──────               ────────"
-for ((i=0; i<nrows; i++)); do
+for ((i=1; i<nrows; i++)); do
   mi=$((i - 1))
   if (( mi >= 0 && mi < nmc )); then
     printf "%-6d  %-18s  %-18s  %-18s  %-18s\n" "$i" \

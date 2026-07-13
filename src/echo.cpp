@@ -24,7 +24,6 @@
 #include <algorithm>
 #include <ctime>
 #include <filesystem>
-#include <iomanip>
 
 using namespace sycl;
 
@@ -117,7 +116,6 @@ int main(int argc, char** argv ) {
   real *aMax  = malloc_shared<real>(NDIM, qDev), vChar; // For reduction, and CFL in timestepping
   // Main Evolution loop
   Log::togglePcontrol(1); // start profiling
-  TB::Timer kTimer;
   while( (problem.t() <= problem.tMax()) && (problem.iStep() < problem.nStep()) ){
 
     for (int irk = 0; irk < NRK; irk++){  // RK loop
@@ -129,8 +127,7 @@ int main(int argc, char** argv ) {
         //-- Flux kernel (PoV of f[])
         range<3> rFlx = range(gridF[myDir].n[0], gridF[myDir].n[1], gridF[myDir].n[2]); // Fluxes along this direction
         //-- Nameless kernels as sometimes name and reduction clash (eg. AMD with LLVM-Intel)
-        kTimer.on();
-	qDev.parallel_for(getMatchingNdRange(rFlx, range<3>(wgMax,wgMax,wgMax)), maxReduction, [=](nd_item<3> it, auto &max) {
+        qDev.parallel_for(getMatchingNdRange(rFlx, range<3>(wgMax,wgMax,wgMax)), maxReduction, [=](nd_item<3> it, auto &max) {
           //-- Several varied indexes and stuff... SYCL USM is not ready for this!
           id<3> gid = it.get_global_id();  // Flux indexes
           if (isOutOfBounds(gid, rFlx)){ return; } // Allows for arbitrary grid and workgroup sizes. Circumvents nvidia bug.
@@ -175,18 +172,14 @@ int main(int argc, char** argv ) {
 #endif
         }); // End parallel_for
         qDev.wait_and_throw(); // Now the flux is available everywhere
-        Log::cups(kTimer, "flux ", Ncell);
 
         //-- Flux reconstr & Derivatives. Trying to provide more halos to skip this was not beneficial!
-        kTimer.on();
         DD->BCex(myDir, gridF[myDir], f, BCEX_FL); // call BCEX on fluxes.
-        Log::cups(kTimer, "bcf  ", Ncell);
 
 #ifndef NDEBUG
 	problem.dump(f    , gridF[myDir], runName+"/flux"+std::to_string(myDir), runName);
 	problem.dump(debug, grid        , runName+"/debug"                     , runName);
 #endif
-        kTimer.on();
         qDev.parallel_for<class parForUpdateDu>(rStd, [=](item<3> it) { //-- Update du with current direction
           id<3> id = it.get_id();
           if (isOutOfBounds(id, rStd)){ return; }
@@ -195,23 +188,19 @@ int main(int argc, char** argv ) {
           int dStride= stride   (id,   myDir, gridF[myDir].nh); // Byproduct of the above
           for (int i=0; i<FLD_TOT; ++i){ du[i][myId]+= holibDer(fId, f[i], dStride)/grid.dx[myDir];}
         }).wait_and_throw(); // Now we have the du up to the current direction
-        Log::cups(kTimer, "du   ", Ncell);
       } // End loop on directions
 
       if (0 == irk){ //- Only at the end of 1st RK step compute the timestep & print time (less MPI barriers)
-        kTimer.on();
         problem.lap(); // Store the timestep value before barrier, to estimate load imbalance.
         MPI_Allreduce(MPI_IN_PLACE, aMax, NDIM, MPI_REAL, MPI_MAX, MPI_COMM_WORLD ); // MPI_COMM_WORLD is an epsilon faster than DD->cartComm()
         vChar=std::max( {aMax[0]/grid.dx[0], aMax[1]/grid.dx[1], aMax[2]/grid.dx[2]} );  // Accumulation
         problem.dtUpdate(vChar); dtLoc = problem.dt(); // Update timing & print it
         for (int i=0; i<FLD_TOT; ++i) { qDev.memcpy(u0[i], u[i], Ncell*sizeof(real)); } // Store original u: u0 = u
         qDev.wait_and_throw();
-        Log::cups(kTimer, "cfl  ", Ncell);
       }
 
       {
         real c2pTol = problem.tolCons2Prim(); // tighter after restart
-        kTimer.on();
         qDev.parallel_for<class parForRK>(rStd, [=](item<3> it) { //-- Updating RK
           id<3> id = it.get_id();
           range<3> ar = it.get_range();
@@ -223,12 +212,9 @@ int main(int argc, char** argv ) {
           Metric g(grid.xC(id, 0), grid.xC(id, 1), grid.xC(id, 2));
           cons2prim(myId, Ncell, u, v, g, c2pTol);
         }).wait_and_throw();
-        Log::cups(kTimer, "rk   ", Ncell);
       }
 
-      kTimer.on();
       for(unsigned myDir=0; myDir<NDIM; myDir++) { DD->BCex(myDir, grid, v); }
-      Log::cups(kTimer, "bcv  ", Ncell);
 
     }//-- END RK
     qDev.wait_and_throw();
