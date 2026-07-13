@@ -46,7 +46,7 @@ SYCL_EXTERNAL inline real holibPhi(real r){ //-- rec of echo-mini, may be droppe
   real tmin = sycl::min(2.0*r, 0.5*(1.0 + r));
   return sycl::max(0.0, sycl::min(tmin, 2.0)); // monotonized central
 #elif RECONSTR==VANLEER
-  return (r + sycl::fabs(r))/(1. + sucl::fabs(r));  // van Leer
+  return (r + sycl::fabs(r))/(1. + sycl::fabs(r));  // van Leer
 #else
   return 0.0;
 #endif
