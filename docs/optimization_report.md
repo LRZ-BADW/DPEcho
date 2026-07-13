@@ -6,7 +6,7 @@ Generated from `-DCMAKE_BUILD_TYPE=OptReport` build (Intel oneAPI 2026.0.0, GRMH
 
 ## Top Priority
 
-### 1. `Metric` methods not inlined on host
+- [x] ### 1. `Metric` methods not inlined on host
 
 `gCon()`, `dgCov()`, `dgBeta()` are called **30+ times each** in the unrolled
 `physicalSource` loop but the compiler marks them EXTERN (not inlined). This is
@@ -15,7 +15,7 @@ the single biggest host-side optimization opportunity.
 **Fix:** Add `inline` or `[[gnu::always_inline]]` to these methods in
 `Metric.hpp`.
 
-### 2. `cons2prim` Newton-Raphson cannot vectorize
+- [ ] ### 2. `cons2prim` Newton-Raphson cannot vectorize
 
 - `GRMHD.cpp:54` — 5 FLOW dependencies across iterations
 - `Problem.cpp:309`, `Problem.cpp:392` — 4 FLOW + 1 ANTI dependence
@@ -23,8 +23,10 @@ the single biggest host-side optimization opportunity.
 The iterative solve has true loop-carried dependencies that block SIMD.
 Inherent to the Gauss-Seidel-style algorithm.
 
-**Possible fix:** Rewrite with Jacobi-style (block) iteration, or use explicit
-SIMD intrinsics.
+**Not a real bottleneck:** `cons2prim` is already called inside SYCL
+`parallel_for` (Problem.cpp:337), so parallelism is at the cell level, not the
+iteration level. The inner Newton-Raphson loop is per-cell and sequential by
+nature. No action needed.
 
 ### 3. `mp5()` register spilling (Solver.cpp)
 
