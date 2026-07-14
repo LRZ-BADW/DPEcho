@@ -79,15 +79,17 @@ run_and_compare() {
   echo
 }
 
-# ── Run 7 tests ───────────────────────────────────────────────────────────────
+# ── Run 9 tests ───────────────────────────────────────────────────────────────
 for t in \
-  "grmhd_serial  grmhd 1 grmhd_periodic.par" \
-  "grmhd_mpi     grmhd 8 grmhd_mpi.par" \
-  "mhd_serial    mhd   1 mhd_periodic.par" \
-  "hd_serial     hd    1 hd_periodic.par" \
-  "grhd_serial   grhd  1 grhd_periodic.par" \
-  "bcof3_serial  grmhd 1 grmhd_bcof3.par" \
-  "fileio_test   grmhd 1 grmhd_fileio.par"; do
+  "alfven_grmhd_per_long    grmhd 1  alfven_grmhd_per_long.par" \
+  "alfven_grmhd_of3_long    grmhd 1  alfven_grmhd_of3_long.par" \
+  "alfven_mhd_per_long      mhd   1  alfven_mhd_per_long.par" \
+  "uniform_hd_per_long      hd    1  uniform_hd_per_long.par" \
+  "uniform_grhd_per_long    grhd  1  uniform_grhd_per_long.par" \
+  "blastwave_grmhd_of0_long grmhd 1  blastwave_grmhd_of0_long.par" \
+  "blastwave_grmhd_of3_long grmhd 1  blastwave_grmhd_of3_long.par" \
+  "alfven_grmhd_mpi         grmhd 8  alfven_grmhd_mpi.par" \
+  "alfven_grmhd_per         grmhd 1  alfven_grmhd_per.par"; do
   read -r test bld ranks par <<< "$t"
   echo "━━━ $test ━━━"
   run_and_compare "$test" "$bld" "$ranks" "$par"

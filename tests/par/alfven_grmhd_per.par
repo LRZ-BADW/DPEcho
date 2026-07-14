@@ -7,9 +7,6 @@ yMin -0.5
 yMax  0.5
 zMin -0.5
 zMax  0.5
-Rx 0
-Ry 0
-Rz 0
 //- Grid
 Mx 32
 My 32
@@ -18,7 +15,7 @@ Hx 4
 Hy 4
 Hz 4
 //- Problem
-nStep 5
+nStep 21
 tMax 1.0
 tOut 0.1
 problem Alfven
@@ -27,4 +24,3 @@ alfLy 1
 alfLz 1
 //- I/O
 fileIO 1
-dumpHalos 0
