@@ -11,30 +11,7 @@
 #include "Physics.hpp"
 #include "echo.hpp"
 
-// --- These functions are convenience functions, no modifications should be needed here.
-SYCL_EXTERNAL void   Metric::beta(real bet[NDIM]){   bet[0] = betai(0); bet[1] = betai(1);  bet[2] = betai(2);}
-SYCL_EXTERNAL real  Metric::g3DCon(real g[9]){
-  for (unsigned int ix = 0; ix < 3; ix++)
-    for (unsigned int jx = 0; jx < 3; jx++)
-      g[ix+3*jx] = gCon(ix, jx);
-  return gDet(); // Determinant
-}
-SYCL_EXTERNAL real Metric::g3DCov(real g[9]){
-  for (unsigned int ix = 0; ix < 3; ix++)
-    for (unsigned int jx = 0; jx < 3; jx++)
-      g[ix+3*jx] = gCov(ix, jx);
-  return 1.0 / gDet();
-}
-SYCL_EXTERNAL void Metric::con2Cov(real vCon[3], real vCov[3]) {
-  vCov[0] = gCov(0, 0) * vCon[0] + gCov(0, 1) * vCon[1] + gCov(0, 2) * vCon[2];
-  vCov[1] = gCov(1, 0) * vCon[0] + gCov(1, 1) * vCon[1] + gCov(1, 2) * vCon[2];
-  vCov[2] = gCov(2, 0) * vCon[0] + gCov(2, 1) * vCon[1] + gCov(2, 2) * vCon[2];
-}
-SYCL_EXTERNAL void Metric::cov2Con(real vCov[3], real vCon[3]) {
-  vCon[0] = gCon(0, 0) * vCov[0] + gCon(0, 1) * vCov[1] + gCon(0, 2) * vCov[2];
-  vCon[1] = gCon(1, 0) * vCov[0] + gCon(1, 1) * vCov[1] + gCon(1, 2) * vCov[2];
-  vCon[2] = gCon(2, 0) * vCov[0] + gCon(2, 1) * vCov[1] + gCon(2, 2) * vCov[2];
-}
+// DEAD STATIC FUNC: beta, g3DCon, g3DCov, con2Cov, cov2Con — moved to Metric.hpp as inline
 // FIXME: The following two likely need some corrections... (betaCon? betaCov?)
 // Presumably, they won't be used, so it doesn't matter.
 SYCL_EXTERNAL void Metric::g4DCov(real g[16]){
