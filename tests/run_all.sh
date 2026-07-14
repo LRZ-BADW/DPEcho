@@ -88,7 +88,7 @@ for t in \
   "uniform_grhd_per_long    grhd  1  uniform_grhd_per_long.par" \
   "blastwave_grmhd_of0_long grmhd 1  blastwave_grmhd_of0_long.par" \
   "blastwave_grmhd_of3_long grmhd 1  blastwave_grmhd_of3_long.par" \
-  "alfven_grmhd_mpi         grmhd 8  alfven_grmhd_mpi.par" \
+  "alfven_grmhd_of0         grmhd 8  alfven_grmhd_of0.par" \
   "alfven_grmhd_per         grmhd 1  alfven_grmhd_per.par"; do
   read -r test bld ranks par <<< "$t"
   echo "━━━ $test ━━━"
