@@ -115,7 +115,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
   using dex4 = ms::dextents<size_t, 4>;
 
   MPI_Status  status;
-  int i0 = 0; // No extra shift needed; flux grid dimensions already handled by Grid ctor
+  int i0 = (dType==BCEX_VU)?0:1; // Flux is Mx+1 so bcex needs shift
 
   int   nBuf[] = {gr.nh[0], gr.nh[1], gr.nh[2]}; nBuf[myDir] = gr.h[myDir];
   int   nOff[] = {       0,        0,        0}; nOff[myDir] = gr.h[myDir];
