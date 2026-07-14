@@ -30,6 +30,14 @@ Further requirements:
 * VisIt for visualization of the output.
 * Boost for energy meter (see below)
 
+## Setup
+
+After cloning, enable the pre-commit hook that runs GRMHD tests on source changes:
+
+```bash
+./setup.sh
+```
+
 ## Building
 
 make sure that your SYCL compiler and CMake are in available in your environment.
