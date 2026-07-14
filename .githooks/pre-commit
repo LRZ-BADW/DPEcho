@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+# Only run tests when source code changes
+if ! git diff --cached --name-only | grep -qE '\.(cpp|hpp|h|cmake)$|CMakeLists\.txt'; then
+  exit 0
+fi
+
+echo "── pre-commit: source changed, running GRMHD tests ──"
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+if ! "$ROOT/tests/run_grmhd.sh"; then
+  echo "── pre-commit: tests FAILED, commit blocked ──"
+  exit 1
+fi
+
+echo "── pre-commit: tests passed, adding perf files ──"
+git add -f "$ROOT/tests/out/"*.perf
+
+echo "── pre-commit: done ──"
+exit 0
