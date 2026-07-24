@@ -33,9 +33,10 @@ class Domain {
     int neighRankPrev_[NDIM], neighRankNext_[NDIM];  MPI_Comm cartComm_;
     real *sendBufL, *sendBufR;                // Additional buffers, as sendRecv needs two
     MPI_Request reqSendL[NDIM], reqSendR[NDIM], reqRecvL[NDIM], reqRecvR[NDIM];
+    int nFields_;
 
   public:
-    Domain(sycl::queue, size_t[NDIM], Parameters &);
+    Domain(sycl::queue, size_t[NDIM], Parameters &, int nFields);
     ~Domain( );
     void BCex (int direction, Grid gr, real_array &v, int dType=BCEX_VU); // gr is the usual local grid.
     void cartInfo();

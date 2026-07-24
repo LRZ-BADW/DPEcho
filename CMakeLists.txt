@@ -16,11 +16,7 @@ project( DPEcho
 )
 
 add_executable (dpecho
-  src/echo.cpp src/Logger.cpp src/Grid.cpp src/Domain.cpp src/Problem.cpp src/Metric.cpp src/Solver.cpp src/Device.cpp src/Parameters.cpp
-  $<$<STREQUAL:${PHYSICS},MHD>:src/Physics/MHD.cpp>
-  $<$<STREQUAL:${PHYSICS},GRMHD>:src/Physics/GRMHD.cpp>
-  $<$<STREQUAL:${PHYSICS},HD>:src/Physics/HD.cpp>
-  $<$<STREQUAL:${PHYSICS},GRHD>:src/Physics/GRHD.cpp>
+  src/echo.cpp src/Logger.cpp src/Grid.cpp src/Domain.cpp src/Problem.cpp src/Physics.cpp src/Metric.cpp src/Solver.cpp src/Device.cpp src/Parameters.cpp
   src/echo.hpp src/Logger.hpp src/Grid.hpp src/Domain.hpp src/Problem.hpp src/Physics.hpp src/Metric.hpp src/Solver.hpp src/Device.hpp src/Parameters.hpp
 )
 set_target_properties(dpecho PROPERTIES OUTPUT_NAME "dpecho")
@@ -203,11 +199,5 @@ else ()
   unset(RECONSTR CACHE)
 endif(REC_ORDER LESS_EQUAL 2)
 
-set(PHYSTYPE MHD GRMHD HD GRHD)
-set(PHYSICS GRMHD CACHE STRING "Choose Physics Solver")
-set_property(CACHE PHYSICS PROPERTY STRINGS ${PHYSTYPE})
-target_compile_definitions(dpecho PUBLIC PHYSICS=${PHYSICS})
-string(TOLOWER ${PHYSICS} _phys_suffix)
-
 ##-- Executable name
-set_target_properties(dpecho PROPERTIES OUTPUT_NAME "dpecho_${_phys_suffix}")
+set_target_properties(dpecho PROPERTIES OUTPUT_NAME "dpecho")

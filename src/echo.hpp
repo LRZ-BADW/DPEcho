@@ -15,35 +15,16 @@
 
 #define NDIM 3
 
-//-- Physics constants (must be before field numbering, used in #if comparisons)
-#define MHD 0
-#define GRMHD 1
-#define HD 2
-#define GRHD 3
-
-//-- Field numbering
-#if PHYSICS == MHD || PHYSICS == GRMHD
-#  define RH 0
-#  define VX 1
-#  define VY 2
-#  define VZ 3
-#  define PG 4
-#  define BX 5
-#  define BY 6
-#  define BZ 7
-#  define FLD_VEC 2 // Vector fields
-#  define FLD_SCA 2 // Scalar fields
-#  define FLD_TOT 8 // (FLD_SCA + 3*FLD_VEC)  Tot fields
-#else  // HD || GRHD
-#  define RH 0
-#  define VX 1
-#  define VY 2
-#  define VZ 3
-#  define PG 4
-#  define FLD_VEC 1 // Vector fields
-#  define FLD_SCA 2 // Scalar fields
-#  define FLD_TOT 5 // (FLD_SCA + 3*FLD_VEC)  Tot fields
-#endif
+//-- Field numbering (universal; non-magnetic physics simply ignores BX..BZ)
+#define RH 0
+#define VX 1
+#define VY 2
+#define VZ 3
+#define PG 4
+#define BX 5
+#define BY 6
+#define BZ 7
+#define MAX_FIELDS 8
 
 //-- Holib stuff
 #ifdef  RECONSTR

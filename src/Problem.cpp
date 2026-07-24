@@ -11,7 +11,6 @@
 #include "Problem.hpp"
 #include "Grid.hpp"
 #include "Metric.hpp"
-#include "Physics.hpp"
 #include "Solver.hpp"
 #include <algorithm>
 #include <cmath>
@@ -24,11 +23,13 @@
 using namespace std;
 using namespace sycl;
 
-Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, real *fld, std::string runName): config(parFile) {
+Problem::Problem(sycl::queue qx, Parameters &parFile, Grid *grid, Domain *D, Physics *phys, real *fld, std::string runName): config(parFile), phys_(phys) {
   runName_ = config.getOr("runName", runName);
   grid_ = grid; D_ = D; N_ = grid_->nht;
+  nFields_ = phys->fldTot();
   iOut_ = 0; iStep_ = 0; nStep_ = config.getOr("nStep", 0);  dumpHalos = static_cast<bool>(config.getOr("dumpHalos", 0)); locSize = config.getOr("locSize", 1); fileIO_ = static_cast<bool>(config.getOr("fileIO", 1));
   tMax_   = config.getOr<real>("tMax", 1.0); dt_ = 0.0; dt_prev_ = 0.0; t_ = 0.0; tOut_ = config.getOr("tOut", 0.025); cfl_ = 0.8 / static_cast<real>(NDIM); // Divide by NDIM dimensions
+  v_ = new real*[nFields_]; u_ = new real*[nFields_];
   qq = qx;
   stepTime_.init();
 
@@ -127,9 +128,9 @@ void Problem::writeVTKAsync(Grid &gr, std::string dir, std::string name) {
       << " Spacing=\"" << gr.dx[0] << " " << gr.dx[1] << " " << gr.dx[2] << "\">\n";
   hdr << "    <Piece Extent=\"" << xs << " " << xe << " " << ys << " " << ye << " " << zs << " " << ze << "\">\n";
   hdr << "      <CellData>\n";
-  for (int v = 0; v < FLD_TOT; v++) {
+  for (unsigned v = 0; v < nFields_; v++) {
     size_t off = static_cast<size_t>(v) * varBlkBytes;
-    hdr << "        <DataArray type=\"" << VTK_REAL << "\" Name=\"" << varLabel[v]
+    hdr << "        <DataArray type=\"" << VTK_REAL << "\" Name=\"" << varLabel(v, phys_->isMagnetic())
         << "\" format=\"appended\" offset=\"" << off << "\"/>\n";
   }
   hdr << "      </CellData>\n";
@@ -148,14 +149,14 @@ void Problem::writeVTKAsync(Grid &gr, std::string dir, std::string name) {
   std::string header = hdr.str();
 
   // Pack interleaved out[] into per-variable contiguous blocks
-  size_t binSize = static_cast<size_t>(FLD_TOT) * varBlkBytes;
+  size_t binSize = static_cast<size_t>(nFields_) * varBlkBytes;
   binBuf_ = new char[binSize];
-  for (int v = 0; v < FLD_TOT; v++) {
+  for (unsigned v = 0; v < nFields_; v++) {
     size_t blkOff = static_cast<size_t>(v) * varBlkBytes;
     *reinterpret_cast<uint32_t*>(binBuf_ + blkOff) = perVarBlock;
     real *varDst = reinterpret_cast<real*>(binBuf_ + blkOff + sizeof(uint32_t));
     for (int i = 0; i < Ntot; i++)
-      varDst[i] = out[i * FLD_TOT + v];
+      varDst[i] = out[i * nFields_ + v];
   }
 
   // Open .vti, write header sync, start async write of packed binary
@@ -196,8 +197,8 @@ void Problem::writePVTI(std::string dir, std::string name, unsigned long out) {
        << " Origin=\"" << D_->boxMin(0) << " " << D_->boxMin(1) << " " << D_->boxMin(2) << "\""
        << " Spacing=\"" << grid_->dx[0] << " " << grid_->dx[1] << " " << grid_->dx[2] << "\">\n";
   pvti << "    <PCellData>\n";
-  for (int v = 0; v < FLD_TOT; v++)
-    pvti << "      <PDataArray type=\"" << VTK_REAL << "\" Name=\"" << varLabel[v] << "\"/>\n";
+  for (unsigned v = 0; v < nFields_; v++)
+    pvti << "      <PDataArray type=\"" << VTK_REAL << "\" Name=\"" << varLabel(v, phys_->isMagnetic()) << "\"/>\n";
   pvti << "    </PCellData>\n";
 
   int Rx = D_->cartDims(0), Ry = D_->cartDims(1), Rz = D_->cartDims(2);
@@ -241,18 +242,19 @@ void Problem::dump(real_array &v, Grid &gr, std::string dir, std::string name){
     waitOut();
     // Device code: interleave all variables into single out[] buffer
     real *out_ = out;
+    int nf = nFields_;
     if(dumpHalos){
       qq.parallel_for<class parForDumpWH>(range(gr.nht), [=](id<1> i) {
-        for(int iVar=0; iVar<FLD_TOT; ++iVar)
-          out_[i * FLD_TOT + iVar] = v[iVar][i];
+        for(int iVar=0; iVar<nf; ++iVar)
+          out_[i * nf + iVar] = v[iVar][i];
       });
     } else {
       qq.parallel_for<class parForDumpNH>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
         auto id = it.get_id();
         auto iOut = id[0] + id[1] * gr.n[0] + id[2] * gr.n[0] * gr.n[1];
         auto iV   = globLinId(id, gr.nh, gr.h);
-        for(int iVar=0; iVar<FLD_TOT; ++iVar)
-          out_[iOut * FLD_TOT + iVar] = v[iVar][iV];
+        for(int iVar=0; iVar<nf; ++iVar)
+          out_[iOut * nf + iVar] = v[iVar][iV];
       });
     }
     qq.wait_and_throw();
@@ -306,7 +308,7 @@ void Problem::restart(real_array &v, real_array &u, std::string restartDir) {
   iOut_  = iOutStr.empty() ? 0UL : std::stoul(iOutStr) + 1; // Next dump after the one we loaded
   tolCons2Prim_ = 1.e-12; // Tighter tolerance after restart to reduce roundtrip error
 
-  for (int i = 0; i < FLD_TOT; ++i) { v_[i] = v[i]; u_[i] = u[i]; }
+  for (unsigned i = 0; i < nFields_; ++i) { v_[i] = v[i]; u_[i] = u[i]; }
 
   // Find appended binary start
   auto atag = s.find("<AppendedData encoding=\"raw\">");
@@ -317,7 +319,7 @@ void Problem::restart(real_array &v, real_array &u, std::string restartDir) {
 
   // Host-side de-interleave: VTK order (x fastest, NH) -> WH-indexed device
   real* vtbuf = new real[Ntot];
-  for (int vi = 0; vi < FLD_TOT; vi++) {
+  for (unsigned vi = 0; vi < nFields_; vi++) {
     const char* varBlk = binStart + vi * varBlkBytes;
     std::memcpy(vtbuf, varBlk + sizeof(uint32_t), perVarData);
     real* vDev = v[vi];
@@ -334,12 +336,13 @@ void Problem::restart(real_array &v, real_array &u, std::string restartDir) {
   // Compute conserved variables from restored primitives
   {
     real c2pTol = tolCons2Prim_;
+    Physics *p = phys_;
     qq.parallel_for(range(Lx, Ly, Lz), [=, gr = *(this->grid_)](item<3> it) {
       auto i = globLinId(it, gr.nh, gr.h);
       id<3> id = it.get_id();
       Metric g(gr.xC(id, 0), gr.xC(id, 1), gr.xC(id, 2));
-      prim2cons(i, gr.nht, v, u, g);
-      cons2prim(i, gr.nht, u, v, g, c2pTol);
+      p->prim2cons(i, gr.nht, v, u, g);
+      p->cons2prim(i, gr.nht, u, v, g, c2pTol);
     }).wait_and_throw();
   }
 
@@ -376,10 +379,8 @@ void Problem::init(real_array &v, real_array &u) {
   string problemName = config.getOr("problem", "INVALID"s);
   if (problemName == "Uniform"s) {
     Uniform(v, u);
-#if PHYSICS == MHD || PHYSICS == GRMHD
-  } else if (problemName == "Alfven"s) {
+  } else if (phys_->isMagnetic() && problemName == "Alfven"s) {
     Alfven(v,u);
-#endif
   } else if (problemName == "Blastwave"s) {
     BlastWave(v, u);
   } else if (problemName == "Gradient"s) {
@@ -389,7 +390,7 @@ void Problem::init(real_array &v, real_array &u) {
     abort();
   }
   config.report();
-  for (int i = 0; i < FLD_TOT; ++i) { v_[i] = v[i]; u_[i] = u[i]; }
+  for (unsigned i = 0; i < nFields_; ++i) { v_[i] = v[i]; u_[i] = u[i]; }
 }
 
 ////-- Problem-specific ICs
@@ -397,20 +398,21 @@ void Problem::Uniform(real_array &v, real_array &u){ // HOST CODE: Initializing
   auto xx = config.getOr("uniConst", 1.0);
   InitConstWH(v[RH], xx);  InitConstWH(v[PG], 1.); // this is all device code
   InitConstWH(v[VX], .5);  InitConstWH(v[VY], .5); InitConstWH(v[VZ], .5);
-#if PHYSICS == MHD || PHYSICS == GRMHD
-  InitConstWH(v[BX], 0.);  InitConstWH(v[BY], 0.); InitConstWH(v[BZ], 0.);
-#endif
+  if (phys_->isMagnetic()) {
+    InitConstWH(v[BX], 0.);  InitConstWH(v[BY], 0.); InitConstWH(v[BZ], 0.);
+  }
   qq.wait_and_throw();
   Log::cout(0) << TAG << "Initialized Problem Uniform." << Log::endl;
 
   // Same as all other problems: prim2cons and cons2prim to ensure physical correctness.
   Grid gr = *grid_; // For ease of lambda capture
+  Physics *p = phys_;
   qq.parallel_for(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
     auto i = globLinId(it, gr.nh, gr.h); // Addressing fld: WH indexing
     id<3> id = it.get_id();
     Metric g(gr.xC(id, 0), gr.xC(id, 1), gr.xC(id, 2));
-    prim2cons(i, gr.nht, v, u, g);
-    cons2prim(i, gr.nht, u, v, g);
+    p->prim2cons(i, gr.nht, v, u, g);
+    p->cons2prim(i, gr.nht, u, v, g);
   }).wait_and_throw();
 
   // BCex. Leave all directions for debug purposes with dumpHalos on! -SC
@@ -419,24 +421,26 @@ void Problem::Uniform(real_array &v, real_array &u){ // HOST CODE: Initializing
   Log::cout(0) << TAG << "Initialized Problem Uniform in " << stepTime_.lap() << Log::endl;
 }
 
-#if PHYSICS == MHD || PHYSICS == GRMHD
 void Problem::Alfven(real_array &v, real_array &u){ // HOST CODE: Initializing
   real alfRH = config.getOr<real>("alfRH", 1.0), alfB0 = config.getOr<real>("alfB0", 1.0), alfPG = config.getOr<real>("alfPG", 1.0), alfAmp=config.getOr<real>("alfAmp", 1.0);
   real alfLx = config.getOr<real>("alfLx", 1.0), alfLy = config.getOr<real>("alfLy", 1.0), alfLz = config.getOr<real>("alfLz", 1.0);
   tMax_ = config.getOr<real>("tMax", 1.0);
   stepTime_.on();
+  bool isMag = phys_->isMagnetic();
+  int physType = phys_->type();
 
   real kx = alfLx ? 2*M_PI/alfLx:0.0,  ky = alfLy ? 2*M_PI/alfLy:0.0, kz = alfLz ? 2*M_PI/alfLz:0.0;
   Log::cout(4) << TAG << "kxyz " << kx << " " << ky << " " << kz << Log::endl;
 
-#if PHYSICS==MHD
-  real va = alfB0 / std::sqrt(alfRH);
-#elif PHYSICS==GRMHD
-  real wt  = alfRH + (GAMMA1)*alfPG + alfB0*alfB0*(1+alfAmp*alfAmp);
-  real tmp = 2*alfAmp*alfB0*alfB0/wt;
-  real va  = alfB0 / std::sqrt( wt* 0.5 *(1.+std::sqrt(1.-tmp*tmp) ) );
-  real vmul= 1.0/std::sqrt(1.0 - (alfAmp*alfAmp*va*va));
-#endif
+  real va;
+  if (phys_->type() == Physics::MHD) {
+    va = alfB0 / std::sqrt(alfRH);
+  } else {
+    real wt  = alfRH + (GAMMA1)*alfPG + alfB0*alfB0*(1+alfAmp*alfAmp);
+    real tmp = 2*alfAmp*alfB0*alfB0/wt;
+    va  = alfB0 / std::sqrt( wt* 0.5 *(1.+std::sqrt(1.-tmp*tmp) ) );
+  }
+  real vmul = (phys_->type() == Physics::GRMHD) ? 1.0/std::sqrt(1.0 - (alfAmp*alfAmp*va*va)) : 1.0;
   if(1.0 == tMax_ ){ tMax_ = 2*M_PI / (va * std::hypot(kx, ky, kz) ); } // C++17 :)
   Log::cout(0) << TAG << "tMax  is set to " << tMax_ << Log::endl;
   real alp = std::atan2(ky,kx), bet = std::atan2(kz,kx), gam = std::atan2(kz, std::hypot(kx, ky));
@@ -449,6 +453,7 @@ void Problem::Alfven(real_array &v, real_array &u){ // HOST CODE: Initializing
   //-- Device code
   real bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
   Grid gr = *grid_; // For ease of lambda capture
+  Physics *p = phys_;
   qq.parallel_for<class parForProblemAlfven>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
     real phi = 0.0, bx, by, bz, vx, vy, vz;
     auto i = globLinId(it, gr.nh, gr.h); // Addressing fld: WH indexing
@@ -464,20 +469,22 @@ void Problem::Alfven(real_array &v, real_array &u){ // HOST CODE: Initializing
     v[VX][i] = rot[0]*vx + rot[1]*vy + rot[2]*vz;
     v[VY][i] = rot[3]*vx + rot[4]*vy + rot[5]*vz;
     v[VZ][i] = rot[6]*vx + rot[7]*vy + rot[8]*vz;
-#if PHYSICS==GRMHD
-    v[VX][i] *= vmul;  v[VY][i] *= vmul;  v[VZ][i] *= vmul;
-#endif
-    v[BX][i] = rot[0]*bx + rot[1]*by + rot[2]*bz;
-    v[BY][i] = rot[3]*bx + rot[4]*by + rot[5]*bz;
-    v[BZ][i] = rot[6]*bx + rot[7]*by + rot[8]*bz;
+    if (physType == Physics::GRMHD) {
+      v[VX][i] *= vmul;  v[VY][i] *= vmul;  v[VZ][i] *= vmul;
+    }
+    if (isMag) {
+      v[BX][i] = rot[0]*bx + rot[1]*by + rot[2]*bz;
+      v[BY][i] = rot[3]*bx + rot[4]*by + rot[5]*bz;
+      v[BZ][i] = rot[6]*bx + rot[7]*by + rot[8]*bz;
+    }
     v[RH][i] = alfRH;
     v[PG][i] = alfPG;
 
     // Same as all other problems: prim2cons and cons2prim
     id<3> id = it.get_id();
     Metric g(gr.xC(id, 0), gr.xC(id, 1), gr.xC(id, 2));
-    prim2cons(i, gr.nht, v, u, g);
-    cons2prim(i, gr.nht, u, v, g);
+    p->prim2cons(i, gr.nht, v, u, g);
+    p->cons2prim(i, gr.nht, u, v, g);
   }).wait_and_throw();
 
   // BCex. Leave all directions for debug purposes with dumpHalos on! -SC
@@ -485,19 +492,18 @@ void Problem::Alfven(real_array &v, real_array &u){ // HOST CODE: Initializing
   dump(v); // Print ICs
   Log::cout() << TAG << "Initialized Problem Alfven in "<<stepTime_.lap() << Log::endl;
 }
-#endif
 
 void Problem::BlastWave(real_array &v, real_array &u){ // HOST CODE: Initializing
   real r0 = config.getOr("r0", 0.8);
   real rh0 = 1e-4, pg0 = 5e-3, rh1 = 1e-2, pg1 = 1.0;
-#if PHYSICS == MHD || PHYSICS == GRMHD
-  real b0 = 1.0 / sycl::sqrt(2.0);
-#endif
+  bool isMag = phys_->isMagnetic();
+  real b0 = isMag ? 1.0 / sycl::sqrt(2.0) : 0.0;
   real bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
   Grid gr = *this->grid_;
 
   Log::cout(0) << TAG << "WARNING: The Blastwave Problem is not fully tested for lack of BCs. May yield inconsistent results. " << Log::endl;
 
+  Physics *p = phys_;
   qq.parallel_for<class parForProblemBlastwave>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
     auto i = globLinId(it, gr.nh, gr.h);
     real xC = gr.xC(it,0) / bS[0], yC = gr.xC(it,1) / bS[1], zC = gr.xC(it,2) / bS[2];
@@ -508,17 +514,17 @@ void Problem::BlastWave(real_array &v, real_array &u){ // HOST CODE: Initializin
     v[VX][i] = 0.0;
     v[VY][i] = 0.0;
     v[VZ][i] = 0.0;
-#if PHYSICS == MHD || PHYSICS == GRMHD
-    v[BX][i] = b0;
-    v[BY][i] = b0;
-    v[BZ][i] = 0.0;
-#endif
+    if (isMag) {
+      v[BX][i] = b0;
+      v[BY][i] = b0;
+      v[BZ][i] = 0.0;
+    }
     v[RH][i] = rh0 + (rh1 - rh0) * f;
     v[PG][i] = pg0 + (pg1 - pg0) * f;
 
     Metric g(gr.xC(it, 0), gr.xC(it, 1), gr.xC(it, 2));
-    prim2cons(i, gr.nht, v, u, g);
-    cons2prim(i, gr.nht, u, v, g);
+    p->prim2cons(i, gr.nht, v, u, g);
+    p->cons2prim(i, gr.nht, u, v, g);
   });
   qq.wait_and_throw();
   // BCex. Leave all directions for debug purposes with dumpHalos on! -SC
@@ -531,9 +537,11 @@ void Problem::Gradient(real_array &v, real_array &u){ // HOST CODE: Initializing
   real gradRho0 = config.getOr<real>("gradRho0", 1.0);
   real gradRho1 = config.getOr<real>("gradRho1", 2.0);
   real gradP0   = config.getOr<real>("gradP0",   1.0);
+  bool isMag = phys_->isMagnetic();
   real bS[]={D_->boxSize(0), D_->boxSize(1), D_->boxSize(2)};
   real bMin0 = D_->boxMin(0);
   Grid gr = *grid_;
+  Physics *p = phys_;
   qq.parallel_for<class parForProblemGradient>(range(gr.n[0], gr.n[1], gr.n[2]), [=](item<3> it) {
     auto i = globLinId(it, gr.nh, gr.h);
     real x = (gr.xC(it, 0) - bMin0) / bS[0];  // normalized 0..1
@@ -542,17 +550,17 @@ void Problem::Gradient(real_array &v, real_array &u){ // HOST CODE: Initializing
     v[VX][i] = 0.0;
     v[VY][i] = 0.0;
     v[VZ][i] = 0.0;
-#if PHYSICS == MHD || PHYSICS == GRMHD
-    v[BX][i] = 0.0;
-    v[BY][i] = 0.0;
-    v[BZ][i] = 0.0;
-#endif
+    if (isMag) {
+      v[BX][i] = 0.0;
+      v[BY][i] = 0.0;
+      v[BZ][i] = 0.0;
+    }
     v[RH][i] = rho;
     v[PG][i] = pg;
     id<3> id = it.get_id();
     Metric g(gr.xC(id, 0), gr.xC(id, 1), gr.xC(id, 2));
-    prim2cons(i, gr.nht, v, u, g);
-    cons2prim(i, gr.nht, u, v, g);
+    p->prim2cons(i, gr.nht, v, u, g);
+    p->cons2prim(i, gr.nht, u, v, g);
   }).wait_and_throw();
   D_->BCex(2,gr,v);  D_->BCex(1,gr,v);  D_->BCex(0,gr,v);
   dump(v);

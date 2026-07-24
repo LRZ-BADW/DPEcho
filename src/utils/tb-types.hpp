@@ -31,6 +31,6 @@ constexpr const char* FIELD_FORMAT = "DOUBLE";
 typedef real coord[NDIM];
 typedef unsigned int icoord[NDIM];
 
-using real_array = real *const[FLD_TOT];
+using real_array = real**;
 
 #endif

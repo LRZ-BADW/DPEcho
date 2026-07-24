@@ -33,6 +33,9 @@ int main(int argc, char** argv ) {
   std::string parFile = (argc > 1) ? argv[1] : "dpecho.par";
   Parameters param(parFile);
 
+  //-- Physics selection
+  std::string physType = param.getOr("physics", "GRMHD"s);
+
   //-- Logger
   std::string runName = param.getOr("runName", std::filesystem::path(parFile).stem().string());
   std::string restartDir = param.getOr("restartDir", ""s);
@@ -72,9 +75,14 @@ int main(int argc, char** argv ) {
   const size_t  gMax = qDev.get_device().get_info<sycl::info::device::max_work_group_size>();
   const size_t wgMax = param.getOr<int>("wgMax", 4); // Safe and performant default, tune at will.
 
+  //-- Physics on device
+  Physics *phys = sycl::malloc_shared<Physics>(1, qDev);
+  new(phys) Physics(physType);
+  int nFields = phys->fldTot();
+
   //-- Sizes, Domain, Grids
   size_t bufSizes[NDIM]={(Mx+2*Hx)*(My+2*Hy)*Hz,(My+2*Hy)*(Mz+2*Hz)*Hx,(Mz+2*Hz)*(Mx+2*Hx)*Hy}; // BCex buffer size for the largest case
-  Domain *DD = new Domain(qDev, bufSizes, param);  DD->boxInfo();  DD->locInfo();
+  Domain *DD = new Domain(qDev, bufSizes, param, nFields);  DD->boxInfo();  DD->locInfo();
   Grid grid    = Grid(Mx  ,My  ,Mz  ,Hx  ,Hy  ,Hz  , DD->locMin(0),DD->locMax(0), DD->locMin(1),DD->locMax(1), DD->locMin(2),DD->locMax(2));
   Grid gridF[NDIM]={Grid(Mx+1,My  ,Mz  ,Hx-2,   0,   0, 0.,1., 0.,1., 0.,1.),
                  Grid(Mx  ,My+1,Mz  ,   0,Hy-2,   0, 0.,1., 0.,1., 0.,1.),
@@ -85,12 +93,12 @@ int main(int argc, char** argv ) {
 
   // -- Allocations
   int ok = 1;
-  real *out = malloc_shared<real>(Nout * FLD_TOT, qDev); ok = (NULL != out);
-  real   *v[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  v[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!=  v[i]); } // Primitives
-  real   *u[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  u[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!=  u[i]); } // Conserved
-  real  *du[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ du[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!= du[i]); } // Time Evolution
-  real  *u0[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ u0[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!= u0[i]); } // RK basis
-  real   *f[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){  f[i] = malloc_device<real>(Nflux, qDev); ok*=(NULL!=  f[i]); } // Fluxes
+  real *out = malloc_shared<real>(Nout * nFields, qDev); ok = (NULL != out);
+  real **v  = new real*[nFields]; for (int i=0; i<nFields; ++i){  v[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!=  v[i]); } // Primitives
+  real **u  = new real*[nFields]; for (int i=0; i<nFields; ++i){  u[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!=  u[i]); } // Conserved
+  real **du = new real*[nFields]; for (int i=0; i<nFields; ++i){ du[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!= du[i]); } // Time Evolution
+  real **u0 = new real*[nFields]; for (int i=0; i<nFields; ++i){ u0[i] = malloc_device<real>(Ncell, qDev); ok*=(NULL!= u0[i]); } // RK basis
+  real **f  = new real*[nFields]; for (int i=0; i<nFields; ++i){  f[i] = malloc_device<real>(Nflux, qDev); ok*=(NULL!=  f[i]); } // Fluxes
 #ifdef UCT
   real *apG[NDIM];  for (int i=0; i<NDIM; ++i){ apG[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=apG[i]); } // FWD characteristics (best with CT)
   real *amG[NDIM];  for (int i=0; i<NDIM; ++i){ amG[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=amG[i]); } // BWD characteristics (best with CT)
@@ -98,13 +106,13 @@ int main(int argc, char** argv ) {
   real *vt1[NDIM];  for (int i=0; i<NDIM; ++i){ vt1[i] = malloc_device<real>(Nflux, qDev); ok *= (NULL!=vt1[i]); } // Transverse vel. 1
 #endif
 #ifndef NDEBUG    // For printing arbitrary intermediate values
-  real *debug[FLD_TOT];for (int i=0; i < FLD_TOT; ++i){debug[i] = malloc_shared<real>(Ncell, qDev); ok *= (NULL!=debug[i]); }
+  real **debug = new real*[nFields];for (int i=0; i < nFields; ++i){debug[i] = malloc_shared<real>(Ncell, qDev); ok *= (NULL!=debug[i]); }
 #endif
   Log::Assert(ok, "Cannot allocate data. Exiting");
 
   //-- Problem
   real dtLoc; // local copy of time, for ease of capture
-  Problem problem(qDev, param, &grid, DD, out, runName);
+  Problem problem(qDev, param, &grid, DD, phys, out, runName);
   if (!restartDir.empty()) {
     problem.restart(v, u, restartDir);
   } else {
@@ -137,10 +145,10 @@ int main(int argc, char** argv ) {
           int vId=globLinId(gid,grid.nh        , vOff), vSt=stride(gid, myDir, grid.nh        ); // Accessing v, u
 
           // What you declare here resides in GPU core-memory - SC
-          real vR[FLD_TOT],vL[FLD_TOT]; for (int i=0; i<FLD_TOT; ++i){ holibRec(vId,v[i],vSt,vL+i,vR+i); }
+          real vR[MAX_FIELDS],vL[MAX_FIELDS]; for (int i=0; i<nFields; ++i){ holibRec(vId,v[i],vSt,vL+i,vR+i); }
           Metric g(grid.xC(gid, 0), grid.xC(gid, 1), grid.xC(gid, 2));
-          real uR[FLD_TOT],fR[FLD_TOT],vfR[2],vtR[2];  physicalFlux(myDir, g, vR, uR, fR, vfR, vtR);
-          real uL[FLD_TOT],fL[FLD_TOT],vfL[2],vtL[2];  physicalFlux(myDir, g, vL, uL, fL, vfL, vtL);
+          real uR[MAX_FIELDS],fR[MAX_FIELDS],vfR[2],vtR[2];  phys->physicalFlux(myDir, g, vR, uR, fR, vfR, vtR);
+          real uL[MAX_FIELDS],fL[MAX_FIELDS],vfL[2],vtL[2];  phys->physicalFlux(myDir, g, vL, uL, fL, vfL, vtL);
           real ap = sycl::max((real)0., sycl::max( vfL[0], vfR[0]));
           real am = sycl::max((real)0., sycl::max(-vfL[1],-vfR[1]));
 #ifdef UCT // For induction we save these too
@@ -149,14 +157,14 @@ int main(int argc, char** argv ) {
 #endif
           // Fluxes from reconstructed values. When CT is on, this loop leaves B reals out
           real apam = ap + am; if (apam <= 0) { apam = 1e-30; }
-          for (int i=0; i<FLD_TOT; ++i){ real flx = (ap*fL[i]+am*fR[i]-ap*am*(uR[i]-uL[i]))/apam; f[i][fId] = (flx==flx) ? flx : 0; }
+          for (int i=0; i<nFields; ++i){ real flx = (ap*fL[i]+am*fR[i]-ap*am*(uR[i]-uL[i]))/apam; f[i][fId] = (flx==flx) ? flx : 0; }
 
           // For timestepping; needed only if 0==irk
           if(!irk){real localMax = sycl::max(ap, am);  max.combine(localMax); }
 
           if (!myDir){ //- Source terms. Do it once per du calculation
-            for (int i=0; i<FLD_TOT; ++i){ du[i][vId] = 0.0; };
-            real src[4]; physicalSource(vId, v, g, src);
+            for (int i=0; i<nFields; ++i){ du[i][vId] = 0.0; };
+            real src[4]; phys->physicalSource(vId, v, g, src);
             du[VX][vId] = (src[0]==src[0]) ? -src[0] : 0;
             du[VY][vId] = (src[1]==src[1]) ? -src[1] : 0;
             du[VZ][vId] = (src[2]==src[2]) ? -src[2] : 0;
@@ -164,7 +172,7 @@ int main(int argc, char** argv ) {
           }
 
 #ifndef NDEBUG  // Variables you may print for debug. set debug:= <whatYouWantToSee>
-          for (int i=0; i<FLD_TOT; ++i){ debug[i][vId] = vL[i]; }
+          for (int i=0; i<nFields; ++i){ debug[i][vId] = vL[i]; }
           // Some examples for what you may want to debug!
           debug[0][vId] = g.gCon(0,0); debug[1][vId] = g.gCon(1,1);
           debug[2][vId] = g.gCon(2,2); debug[3][vId] = g.gCon(0,2);
@@ -186,7 +194,7 @@ int main(int argc, char** argv ) {
           int myId   = globLinId(id, grid.nh        , grid.h        ); // Accessing v, u and the like
           int fId    = globLinId(id, gridF[myDir].nh, gridF[myDir].h); // Accessing fluxes
           int dStride= stride   (id,   myDir, gridF[myDir].nh); // Byproduct of the above
-          for (int i=0; i<FLD_TOT; ++i){ du[i][myId]+= holibDer(fId, f[i], dStride)/grid.dx[myDir];}
+          for (int i=0; i<nFields; ++i){ du[i][myId]+= holibDer(fId, f[i], dStride)/grid.dx[myDir];}
         }).wait_and_throw(); // Now we have the du up to the current direction
       } // End loop on directions
 
@@ -195,7 +203,7 @@ int main(int argc, char** argv ) {
         MPI_Allreduce(MPI_IN_PLACE, aMax, NDIM, MPI_REAL, MPI_MAX, MPI_COMM_WORLD ); // MPI_COMM_WORLD is an epsilon faster than DD->cartComm()
         vChar=std::max( {aMax[0]/grid.dx[0], aMax[1]/grid.dx[1], aMax[2]/grid.dx[2]} );  // Accumulation
         problem.dtUpdate(vChar); dtLoc = problem.dt(); // Update timing & print it
-        for (int i=0; i<FLD_TOT; ++i) { qDev.memcpy(u0[i], u[i], Ncell*sizeof(real)); } // Store original u: u0 = u
+        for (int i=0; i<nFields; ++i) { qDev.memcpy(u0[i], u[i], Ncell*sizeof(real)); } // Store original u: u0 = u
         qDev.wait_and_throw();
       }
 
@@ -206,11 +214,11 @@ int main(int argc, char** argv ) {
           range<3> ar = it.get_range();
           if (isOutOfBounds(id, rStd)){ return; }
           int myId = globLinId(it.get_id(), grid.nh, grid.h ); // Accessing v, u and the like
-          for (int i=0; i<FLD_TOT; ++i)
+          for (int i=0; i<nFields; ++i)
             u[i][myId] = crk1[irk] * u0[i][myId] + crk2[irk]*( u[i][myId] - dtLoc*du[i][myId] );
           u[RH][myId] = sycl::max(u[RH][myId], (real)RHOFLOOR);
           Metric g(grid.xC(id, 0), grid.xC(id, 1), grid.xC(id, 2));
-          cons2prim(myId, Ncell, u, v, g, c2pTol);
+          phys->cons2prim(myId, Ncell, u, v, g, c2pTol);
         }).wait_and_throw();
       }
 
@@ -233,12 +241,13 @@ int main(int argc, char** argv ) {
   Log::togglePcontrol(0);
 
   problem.waitOut();
+  phys->~Physics(); sycl::free(phys, qDev);
   free(out, qDev);
-  for (int i=0; i < FLD_TOT; ++i){ free(  v[i], qDev); }
-  for (int i=0; i < FLD_TOT; ++i){ free(  u[i], qDev); }
-  for (int i=0; i < FLD_TOT; ++i){ free( u0[i], qDev); }
-  for (int i=0; i < FLD_TOT; ++i){ free(  f[i], qDev); }
-  for (int i=0; i < FLD_TOT; ++i){ free( du[i], qDev); }
+  for (int i=0; i < nFields; ++i){ free(  v[i], qDev); } delete[] v;
+  for (int i=0; i < nFields; ++i){ free(  u[i], qDev); } delete[] u;
+  for (int i=0; i < nFields; ++i){ free( u0[i], qDev); } delete[] u0;
+  for (int i=0; i < nFields; ++i){ free(  f[i], qDev); } delete[] f;
+  for (int i=0; i < nFields; ++i){ free( du[i], qDev); } delete[] du;
 #ifdef UCT
   for (int i=0; i < NDIM; ++i){ free(  apG[i], qDev); }
   for (int i=0; i < NDIM; ++i){ free(amGdu[i], qDev); }
@@ -246,7 +255,7 @@ int main(int argc, char** argv ) {
   for (int i=0; i < NDIM; ++i){ free(  vt2[i], qDev); }
 #endif
 #ifndef NDEBUG
-  for (int i=0; i < FLD_TOT; ++i){ free(debug[i], qDev); }
+  for (int i=0; i < nFields; ++i){ free(debug[i], qDev); } delete[] debug;
 #endif
   Log::cout() << problem.getTimings() << Log::endl;
   Log::finalize();

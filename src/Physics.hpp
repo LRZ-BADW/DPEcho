@@ -14,17 +14,30 @@
 #include "Metric.hpp"
 #include "utils/tb-types.hpp"
 #include "Physics/Common.hpp"
-
 #include "echo.hpp"
-
 #include <sycl/sycl.hpp>
 
-//-- Fields: prim&cons
-SYCL_EXTERNAL void prim2cons(sycl::id<1> gid, unsigned n, real_array v, real_array u, Metric &m);
-SYCL_EXTERNAL void cons2prim(sycl::id<1> gid, unsigned n, real_array u, real_array v, Metric &m, real tol = 1.e-9);
+class Physics {
+public:
+  static constexpr int MHD   = 0;
+  static constexpr int GRMHD = 1;
+  static constexpr int HD    = 2;
+  static constexpr int GRHD  = 3;
 
-//-- Fluxes: here as they know about the metric
-SYCL_EXTERNAL void physicalFlux  (int dir, Metric &g, real vD[FLD_TOT], real uD[FLD_TOT], real f[FLD_TOT], real vf[2], real vt[2]);
-SYCL_EXTERNAL void physicalSource(sycl::id<1> myId, real_array v, Metric &g, real src[4]);
+  Physics(const std::string &name);
+  int type()  const { return type_;  }
+  int fldTot() const { return fldTot_; }
+  bool isMagnetic() const { return fldTot_ == 8; }
+  const char* name() const;
+
+  SYCL_EXTERNAL void prim2cons  (sycl::id<1> myId, unsigned n, real_array v, real_array u, Metric &g);
+  SYCL_EXTERNAL void cons2prim  (sycl::id<1> myId, unsigned n, real_array u, real_array v, Metric &g, real tol = 1.e-9);
+  SYCL_EXTERNAL void physicalFlux  (int dir, Metric &g, real *vD, real *uD, real *f, real vf[2], real vt[2]);
+  SYCL_EXTERNAL void physicalSource(sycl::id<1> myId, real_array v, Metric &g, real src[4]);
+
+private:
+  int type_;
+  int fldTot_;
+};
 
 #endif

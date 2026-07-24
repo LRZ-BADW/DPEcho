@@ -15,6 +15,7 @@
 #include "Domain.hpp"
 #include "Grid.hpp"
 #include "Parameters.hpp"
+#include "Physics.hpp"
 #include "utils/tb-types.hpp"
 #include "utils/tb-timer.hpp"
 
@@ -25,9 +26,10 @@ class Problem {
   public:
     int locSize;
     bool fileIO_, dumpHalos;
-    real *out; // Interleaved output buffer (Ncell * FLD_TOT)
+    real *out; // Interleaved output buffer (Ncell * nFields_)
 
-    Problem(sycl::queue q, Parameters &param, Grid *g, Domain *f, real *out, std::string runName = "task");
+    Problem(sycl::queue q, Parameters &param, Grid *g, Domain *f, Physics *phys, real *out, std::string runName = "task");
+    ~Problem() { delete[] v_; delete[] u_; }
     void InitRampWH (real *);
     void InitRampNH (real *);
     void InitConstWH(real *, real );
@@ -69,22 +71,20 @@ class Problem {
   private:
     void writeVTKAsync(Grid &gr, std::string dir, std::string name);
     void writePVTI(std::string dir, std::string name, unsigned long out);
-#if PHYSICS == MHD || PHYSICS == GRMHD
-    static constexpr const char* varLabel[8] = {
-        "RH", "VX", "VY", "VZ", "PG", "BX", "BY", "BZ"
-    };
-#else
-    static constexpr const char* varLabel[5] = {
-        "RH", "VX", "VY", "VZ", "PG"
-    };
-#endif
+    static const char* varLabel(int i, bool magnetic) {
+      static const char* mag[]  = {"RH", "VX", "VY", "VZ", "PG", "BX", "BY", "BZ"};
+      static const char* hydro[] = {"RH", "VX", "VY", "VZ", "PG"};
+      return magnetic ? mag[i] : hydro[i];
+    }
     std::string runName_;
     Parameters &config;
     sycl::queue qq;
+    Physics *phys_;
     TB::Timer stepTime_;
     real tMax_, t_, dt_, cfl_, tOut_;
-    real *v_[FLD_TOT], *u_[FLD_TOT], dt_prev_, tolCons2Prim_ = 1.e-9;
-    unsigned int N_, nxNH_, nyNH_, nzNH_;
+    real **v_, **u_;
+    real dt_prev_, tolCons2Prim_ = 1.e-9;
+    unsigned int N_, nFields_, nxNH_, nyNH_, nzNH_;
     unsigned long myRank_;
     unsigned long iOut_, iStep_, nStep_;
     Grid   *grid_;

@@ -7,9 +7,9 @@ yMin -0.5
 yMax  0.5
 zMin -0.5
 zMax  0.5
-Rx 2
-Ry 2
-Rz 2
+Rx 0
+Ry 0
+Rz 0
 //- Grid
 Mx 32
 My 32
@@ -17,6 +17,8 @@ Mz 32
 Hx 4
 Hy 4
 Hz 4
+//- Physics
+physics HD
 //- Problem
 nStep 200
 tMax 1.0
@@ -28,5 +30,5 @@ alfLz 1
 bcTypex 1
 bcTypey 1
 bcTypez 1
-fileIO 1
+fileIO 0
 //dumpHalos 1

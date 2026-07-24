@@ -25,14 +25,15 @@ Domain::~Domain( ){
 
 #define CART_DEFAULT 0
 
-Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param) {
+Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param, int nFields) {
   int nprocs = Log::mpiSize(), myrank = Log::mpiRank(),  reorder = 0;
   size_t bufMax = std::max({bufSizes[0], bufSizes[1], bufSizes[2]});
+  nFields_ = nFields;
   qq = q; // Use the queue to allocate the buffers
-  sendBufL= malloc_shared<real>(FLD_TOT*bufMax, qq); Log::Assert(sendBufL, "Cannot allocate recvBufL.");
-  sendBufR= malloc_shared<real>(FLD_TOT*bufMax, qq); Log::Assert(sendBufR, "Cannot allocate recvBufR.");
-  bufL= malloc_shared<real>(FLD_TOT*bufMax, qq);     Log::Assert(bufL, "Cannot allocate bufL.");
-  bufR= malloc_shared<real>(FLD_TOT*bufMax, qq);     Log::Assert(bufR, "Cannot allocate bufR.");
+  sendBufL= malloc_shared<real>(nFields_*bufMax, qq); Log::Assert(sendBufL, "Cannot allocate recvBufL.");
+  sendBufR= malloc_shared<real>(nFields_*bufMax, qq); Log::Assert(sendBufR, "Cannot allocate recvBufR.");
+  bufL= malloc_shared<real>(nFields_*bufMax, qq);     Log::Assert(bufL, "Cannot allocate bufL.");
+  bufR= malloc_shared<real>(nFields_*bufMax, qq);     Log::Assert(bufR, "Cannot allocate bufR.");
 
   boxMin_[0] = param.getOr("xMin", -0.5); boxMin_[1] = param.getOr("yMin", -0.5); boxMin_[2] = param.getOr("zMin", -0.5);
   boxMax_[0] = param.getOr("xMax",  0.5); boxMax_[1] = param.getOr("yMax",  0.5); boxMax_[2] = param.getOr("zMax",  0.5);
@@ -68,10 +69,10 @@ Domain::Domain(sycl::queue q, size_t bufSizes[NDIM], Parameters &param) {
   Log::clog() << TAG << "Domain created!" << Log::endl;  cartInfo();
 
   for(unsigned short i=0; i<NDIM; ++i){
-    MPI_Send_init(sendBufL,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankPrev_[i],10,cartComm_,&reqSendL[i]);
-    MPI_Send_init(sendBufR,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankNext_[i],20,cartComm_,&reqSendR[i]);
-    MPI_Recv_init(    bufL,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankNext_[i],10,cartComm_,&reqRecvL[i]);
-    MPI_Recv_init(    bufR,bufSizes[i]*FLD_TOT,MPI_REAL,neighRankPrev_[i],20,cartComm_,&reqRecvR[i]);
+    MPI_Send_init(sendBufL,bufSizes[i]*nFields_,MPI_REAL,neighRankPrev_[i],10,cartComm_,&reqSendL[i]);
+    MPI_Send_init(sendBufR,bufSizes[i]*nFields_,MPI_REAL,neighRankNext_[i],20,cartComm_,&reqSendR[i]);
+    MPI_Recv_init(    bufL,bufSizes[i]*nFields_,MPI_REAL,neighRankNext_[i],10,cartComm_,&reqRecvL[i]);
+    MPI_Recv_init(    bufR,bufSizes[i]*nFields_,MPI_REAL,neighRankPrev_[i],20,cartComm_,&reqRecvR[i]);
   }
 
 }
@@ -116,6 +117,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
 
   MPI_Status  status;
   int i0 = (dType==BCEX_VU)?0:1; // Flux is Mx+1 so bcex needs shift
+  int nFields = this->nFields_; // local copy for SYCL kernel capture
 
   int   nBuf[] = {gr.nh[0], gr.nh[1], gr.nh[2]}; nBuf[myDir] = gr.h[myDir];
   int   nOff[] = {       0,        0,        0}; nOff[myDir] = gr.h[myDir];
@@ -123,13 +125,13 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
   Log::clog(8) << TAG << " Filling buffers ..." << Log::endl;
 
   //-- Wrap each field as a 3D mdspan over the full WH grid
-  ms::mdspan<real, dex3> v_ms[FLD_TOT];
-  for (int f = 0; f < FLD_TOT; ++f)
+  ms::mdspan<real, dex3> v_ms[MAX_FIELDS];
+  for (int f = 0; f < nFields; ++f)
     v_ms[f] = ms::mdspan<real, dex3>(v[f], gr.nh[0], gr.nh[1], gr.nh[2]);
 
-  //-- Helper: wrap a flat buffer as 4D mdspan (FLD_TOT × slab extents)
-  auto buf4d = [](real* raw, size_t e0, size_t e1, size_t e2) {
-    return ms::mdspan<real, dex4>(raw, FLD_TOT, e0, e1, e2);
+  //-- Helper: wrap a flat buffer as 4D mdspan (nFields × slab extents)
+  auto buf4d = [=](real* raw, size_t e0, size_t e1, size_t e2) {
+    return ms::mdspan<real, dex4>(raw, nFields, e0, e1, e2);
   };
 
   //-- Submdspan helpers for the 4 slabs (safe + reconstruct layout_right)
@@ -177,7 +179,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
   qq.parallel_for(r3, [=](item<3> it) {
     auto id = it.get_id();
     auto p  = grid_pos(0, id[0], id[1], id[2]);
-    for (int f = 0; f < FLD_TOT; ++f)
+    for (int f = 0; f < nFields; ++f)
       sbL(f, id[0], id[1], id[2]) = v_ms[f](p[0], p[1], p[2]);
   }).wait_and_throw();
   MPI_Start(&reqSendL[myDir]);
@@ -187,7 +189,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
   qq.parallel_for(r3, [=](item<3> it) {
     auto id = it.get_id();
     auto p  = grid_pos(1, id[0], id[1], id[2]);
-    for (int f = 0; f < FLD_TOT; ++f)
+    for (int f = 0; f < nFields; ++f)
       sbR(f, id[0], id[1], id[2]) = v_ms[f](p[0], p[1], p[2]);
   }).wait_and_throw();
 
@@ -201,7 +203,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
   qq.parallel_for(r3, [=](item<3> it) {
     auto id = it.get_id();
     auto p  = grid_pos(3, id[0], id[1], id[2]);
-    for (int f = 0; f < FLD_TOT; ++f)
+    for (int f = 0; f < nFields; ++f)
       v_ms[f](p[0], p[1], p[2]) = bL4(f, id[0], id[1], id[2]);
   }).wait_and_throw();
 
@@ -212,7 +214,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
   qq.parallel_for(r3, [=](item<3> it) {
     auto id = it.get_id();
     auto p  = grid_pos(2, id[0], id[1], id[2]);
-    for (int f = 0; f < FLD_TOT; ++f)
+    for (int f = 0; f < nFields; ++f)
       v_ms[f](p[0], p[1], p[2]) = bR4(f, id[0], id[1], id[2]);
   }).wait_and_throw();
   switch(bcType_[myDir]){ //-- PROCESSING BC TYPEs
@@ -222,7 +224,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
         int srcPos = gr.h[myDir] + i0;
         qq.parallel_for(r3, [=](item<3> it) {
           auto id = it.get_id();
-          for (int f = 0; f < FLD_TOT; ++f)
+          for (int f = 0; f < nFields; ++f)
             switch (myDir) {
               case 0: v_ms[f](id[0], id[1], id[2]) = v_ms[f](srcPos, id[1], id[2]); break;
               case 1: v_ms[f](id[0], id[1], id[2]) = v_ms[f](id[0], srcPos, id[2]); break;
@@ -235,7 +237,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
         int srcPos = base - 1;
         qq.parallel_for(r3, [=](item<3> it) {
           auto id = it.get_id();
-          for (int f = 0; f < FLD_TOT; ++f)
+          for (int f = 0; f < nFields; ++f)
             switch (myDir) {
               case 0: v_ms[f](base+id[0], id[1], id[2]) = v_ms[f](srcPos, id[1], id[2]); break;
               case 1: v_ms[f](id[0], base+id[1], id[2]) = v_ms[f](id[0], srcPos, id[2]); break;
@@ -261,7 +263,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
             case 4: c[0]=35; c[1]=-84; c[2]=70; c[3]=-20; break;
           }
           int p0 = src0, p1 = src0+1, p2 = src0+2, p3 = src0+3;
-          for (int f = 0; f < FLD_TOT; ++f) {
+          for (int f = 0; f < nFields; ++f) {
             real val;
             switch (myDir) {
               case 0:
@@ -295,7 +297,7 @@ void Domain::BCex(int myDir, Grid gr, real_array &v, int dType){ // gr is the us
             case 4: c[0]=35; c[1]=-84; c[2]=70; c[3]=-20; break;
           }
           int p0 = base-1, p1 = base-2, p2 = base-3, p3 = base-4;
-          for (int f = 0; f < FLD_TOT; ++f) {
+          for (int f = 0; f < nFields; ++f) {
             real val;
             switch (myDir) {
               case 0:
