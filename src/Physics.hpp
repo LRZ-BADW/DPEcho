@@ -13,7 +13,7 @@
 
 #include "Metric.hpp"
 #include "utils/tb-types.hpp"
-#include "Physics/Common.hpp"
+#include "ThreeVectors.hpp"
 #include "echo.hpp"
 #include <sycl/sycl.hpp>
 
