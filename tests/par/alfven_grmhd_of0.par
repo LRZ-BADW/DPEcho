@@ -1,5 +1,5 @@
 //- Logger
-logVerb 4
+verbosity 4
 //- Domain
 xMin -0.5
 xMax  0.5

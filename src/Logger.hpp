@@ -56,13 +56,12 @@ class LogStream {
 
 class Log {
   static std::ofstream logFile;
-  static int coutVerbosity;
-  static int clogVerbosity;
+  static int verbosity;
   static TB::Timer runtimeTracker;
 
   public:
 
-  static void init(std::string logfileName, int coutVerb, int clogVerb);
+  static void init(std::string logfileName, int verbosity);
   static void finalize();
   static void logo();
 

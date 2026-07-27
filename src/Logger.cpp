@@ -23,13 +23,12 @@
 #include <cstdlib>
 
 std::ofstream Log::logFile;
-int Log::coutVerbosity;
-int Log::clogVerbosity;
+int Log::verbosity;
 TB::Timer Log::runtimeTracker;
 EndMarker const Log::endl;
 FlushMarker const Log::flush;
 
-void Log::init(std::string logfileName, int coutVerb, int clogVerb) {
+void Log::init(std::string logfileName, int verbosity) {
   using namespace std::string_literals;
   int rank = 0;
   MPI_Init(nullptr, nullptr);
@@ -42,8 +41,7 @@ void Log::init(std::string logfileName, int coutVerb, int clogVerb) {
   std::string rankStr = std::to_string(rank); rankStr.insert(0, 8-rankStr.length(), '0');
   logfileName = logfileName + "/"s + rankStr;
   logFile = std::ofstream(logfileName);
-  coutVerbosity = coutVerb;
-  clogVerbosity = clogVerb;
+  Log::verbosity = verbosity;
   Log::Assert(logFile.good(), "Log file "s + logfileName + " failed to open."s);
   logo();
   runtimeTracker.init();
@@ -55,15 +53,15 @@ void Log::finalize() {
 }
 
 
-LogStream<decltype(std::cout)> const Log::cout(int verbosity) { return LogStream(!isMaster() || (verbosity > coutVerbosity), std::cout); }
+LogStream<decltype(std::cout)> const Log::cout(int verbosity) { return LogStream(!isMaster() || (verbosity > Log::verbosity), std::cout); }
 
-LogStream<decltype(std::cerr)> const Log::cerr(int verbosity) { return LogStream(!isMaster() || (verbosity > coutVerbosity), std::cerr); }
+LogStream<decltype(std::cerr)> const Log::cerr(int verbosity) { return LogStream(!isMaster() || (verbosity > Log::verbosity), std::cerr); }
 
 LogStream<std::ofstream>       const Log::clog(int verbosity) {
   if (!logFile.good()) {
     throw std::logic_error("Must initialize log file before logging starts.");
   }
-  return LogStream(verbosity > clogVerbosity, logFile);
+  return LogStream(verbosity > Log::verbosity, logFile);
 }
 
 void Log::Assert(bool condition, std::string message) {

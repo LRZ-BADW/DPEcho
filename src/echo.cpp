@@ -33,9 +33,6 @@ int main(int argc, char** argv ) {
   std::string parFile = (argc > 1) ? argv[1] : "dpecho.par";
   Parameters param(parFile);
 
-  //-- Physics selection
-  std::string physType = param.getOr("physics", "GRMHD"s);
-
   //-- Logger
   std::string runName = param.getOr("runName", std::filesystem::path(parFile).stem().string());
   std::string restartDir = param.getOr("restartDir", ""s);
@@ -48,10 +45,14 @@ int main(int argc, char** argv ) {
     ss << std::put_time(&tm, "%Y-%m-%dT%H%M_") << runName;
     runName = ss.str();
   }
-  int clogVerbosity = param.getOr("clogVerb", 4);
-  int coutVerbosity = param.getOr("coutVerb", 4);
-  Log::init(runName + "/log", coutVerbosity, clogVerbosity);
+  int verbosity = param.getOr("verbosity", 4);
+  Log::init(runName + "/log", verbosity);
+  Log::cout(2) << TAG << "Logger initialized with verbosity=" << verbosity << Log::endl;
   Log::togglePcontrol(0);
+
+  //-- Physics selection
+  std::string physType = param.getOr("physics", "GRMHD"s);
+  Log::cout(7) << TAG << "Physics type: " << physType << Log::endl;
 
   //-- Parameters
   unsigned Mx = param.getOr("Mx", 24), My = param.getOr("My", 24), Mz = param.getOr("Mz", 24);
@@ -74,20 +75,24 @@ int main(int argc, char** argv ) {
   sycl::queue qDev(dc.deviceWith(param));
   const size_t  gMax = qDev.get_device().get_info<sycl::info::device::max_work_group_size>();
   const size_t wgMax = param.getOr<int>("wgMax", 4); // Safe and performant default, tune at will.
+  Log::cout(6) << TAG << "Device selected, max_work_group_size=" << gMax << ", wgMax=" << wgMax << Log::endl;
 
   //-- Physics on device
   Physics *phys = sycl::malloc_shared<Physics>(1, qDev);
   new(phys) Physics(physType);
   int nFields = phys->fldTot();
+  Log::cout(7) << TAG << "Physics object created: " << physType << ", nFields=" << nFields << Log::endl;
 
   //-- Sizes, Domain, Grids
   size_t bufSizes[NDIM]={(Mx+2*Hx)*(My+2*Hy)*Hz,(My+2*Hy)*(Mz+2*Hz)*Hx,(Mz+2*Hz)*(Mx+2*Hx)*Hy}; // BCex buffer size for the largest case
   Domain *DD = new Domain(qDev, bufSizes, param, nFields);  DD->boxInfo();  DD->locInfo();
+  Log::cout(7) << TAG << "Domain created, grid ready" << Log::endl;
   Grid grid    = Grid(Mx  ,My  ,Mz  ,Hx  ,Hy  ,Hz  , DD->locMin(0),DD->locMax(0), DD->locMin(1),DD->locMax(1), DD->locMin(2),DD->locMax(2));
   Grid gridF[NDIM]={Grid(Mx+1,My  ,Mz  ,Hx-2,   0,   0, 0.,1., 0.,1., 0.,1.),
                  Grid(Mx  ,My+1,Mz  ,   0,Hy-2,   0, 0.,1., 0.,1., 0.,1.),
                  Grid(Mx  ,My  ,Mz+1,   0,   0,Hz-2, 0.,1., 0.,1., 0.,1.)};
   grid.print();  for (int i=0; i<NDIM; ++i){ gridF[i].print();}
+  Log::cout(8) << TAG << "Grid layout printed" << Log::endl;
   unsigned Ncell = grid.nht, Nout = dumpHalos ? Ncell : grid.nt; // For comfort
   unsigned Mmax  = std::max({Mx,My,Mz}),  Nflux = Mx*My*Mz/Mmax*(Mmax+1+2*(NGC-1)); // Flux have +1 point
 
@@ -109,10 +114,12 @@ int main(int argc, char** argv ) {
   real **debug = new real*[nFields];for (int i=0; i < nFields; ++i){debug[i] = malloc_shared<real>(Ncell, qDev); ok *= (NULL!=debug[i]); }
 #endif
   Log::Assert(ok, "Cannot allocate data. Exiting");
+  Log::cout(7) << TAG << "Memory allocations completed" << Log::endl;
 
   //-- Problem
   real dtLoc; // local copy of time, for ease of capture
   Problem problem(qDev, param, &grid, DD, phys, out, runName);
+  Log::cout(7) << TAG << "Problem initialized" << Log::endl;
   if (!restartDir.empty()) {
     problem.restart(v, u, restartDir);
   } else {
@@ -124,12 +131,15 @@ int main(int argc, char** argv ) {
   real *aMax  = malloc_shared<real>(NDIM, qDev), vChar; // For reduction, and CFL in timestepping
   // Main Evolution loop
   Log::togglePcontrol(1); // start profiling
+  Log::cout(6) << TAG << "Starting evolution loop" << Log::endl;
   while( (problem.t() <= problem.tMax()) && (problem.iStep() < problem.nStep()) ){
 
     for (int irk = 0; irk < NRK; irk++){  // RK loop
+      Log::cout(8) << TAG << "RK iteration " << irk << " start" << Log::endl;
       if (!irk){ aMax[0]=0.0; aMax[1]=0.0; aMax[2]=0.0; }
 
       for(unsigned myDir=0; myDir<NDIM; myDir++){ // Direction loop
+        Log::cout(8) << TAG << "Direction " << myDir << " start" << Log::endl;
         auto maxReduction = sycl::reduction(aMax + myDir, sycl::maximum<real>());
 
         //-- Flux kernel (PoV of f[])
@@ -183,6 +193,7 @@ int main(int argc, char** argv ) {
 
         //-- Flux reconstr & Derivatives. Trying to provide more halos to skip this was not beneficial!
         DD->BCex(myDir, gridF[myDir], f, BCEX_FL); // call BCEX on fluxes.
+        Log::cout(9) << TAG << "BCex completed for direction " << myDir << " (fluxes)" << Log::endl;
 
 #ifndef NDEBUG
 	problem.dump(f    , gridF[myDir], runName+"/flux"+std::to_string(myDir), runName);
@@ -197,6 +208,7 @@ int main(int argc, char** argv ) {
           for (int i=0; i<nFields; ++i){ du[i][myId]+= holibDer(fId, f[i], dStride)/grid.dx[myDir];}
         }).wait_and_throw(); // Now we have the du up to the current direction
       } // End loop on directions
+      Log::cout(9) << TAG << "Lap completed for direction loop" << Log::endl;
 
       if (0 == irk){ //- Only at the end of 1st RK step compute the timestep & print time (less MPI barriers)
         problem.lap(); // Store the timestep value before barrier, to estimate load imbalance.
@@ -227,6 +239,7 @@ int main(int argc, char** argv ) {
     }//-- END RK
     qDev.wait_and_throw();
     // Log timestep report
+    Log::cout(8) << TAG << "Timestep report: step=" << problem.iStep() << ", dt=" << problem.dt() << Log::endl;
     Log::clog(4) << TAG<<"Step# "<< problem.iStep()<<", dump# "<< problem.iOut()-1 << ", characteristic "<< vChar << Log::endl;
 #ifndef NDEBUG
     problem.dump(u);

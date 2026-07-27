@@ -1,5 +1,5 @@
 //- Logger
-logVerb 4
+verbosity 8
 //- Domain
 xMin -0.5
 xMax  0.5
@@ -15,6 +15,7 @@ Hx 4
 Hy 4
 Hz 4
 //- Problem
+physics HD
 nStep 21
 tMax 1.0
 tOut 0.1
@@ -23,4 +24,4 @@ alfLx 1
 alfLy 1
 alfLz 1
 //- I/O
-fileIO 1
+fileIO 0
