@@ -379,7 +379,7 @@ void Problem::init(real_array &v, real_array &u) {
   string problemName = config.getOr("problem", "INVALID"s);
   if (problemName == "Uniform"s) {
     Uniform(v, u);
-  } else if (phys_->isMagnetic() && problemName == "Alfven"s) {
+  } else if (problemName == "Alfven"s) {
     Alfven(v,u);
   } else if (problemName == "Blastwave"s) {
     BlastWave(v, u);
@@ -429,16 +429,21 @@ void Problem::Alfven(real_array &v, real_array &u){ // HOST CODE: Initializing
   bool isMag = phys_->isMagnetic();
   int physType = phys_->type();
 
+  if (!isMag) {
+    Log::cout(1) << TAG << "WARNING: Alfven problem used with non-magnetic physics. Setting alfB0, alfLx, alfLy, alfLz to 0." << Log::endl;
+    alfB0 = 0.0; alfLx = 0.0; alfLy = 0.0; alfLz = 0.0;
+  }
+
   real kx = alfLx ? 2*M_PI/alfLx:0.0,  ky = alfLy ? 2*M_PI/alfLy:0.0, kz = alfLz ? 2*M_PI/alfLz:0.0;
   Log::cout(4) << TAG << "kxyz " << kx << " " << ky << " " << kz << Log::endl;
 
   real va;
-  if (phys_->type() == Physics::MHD) {
-    va = alfB0 / std::sqrt(alfRH);
-  } else {
+  if (phys_->type() == Physics::GRMHD) {
     real wt  = alfRH + (GAMMA1)*alfPG + alfB0*alfB0*(1+alfAmp*alfAmp);
     real tmp = 2*alfAmp*alfB0*alfB0/wt;
     va  = alfB0 / std::sqrt( wt* 0.5 *(1.+std::sqrt(1.-tmp*tmp) ) );
+  } else {
+    va = alfB0 / std::sqrt(alfRH);
   }
   real vmul = (phys_->type() == Physics::GRMHD) ? 1.0/std::sqrt(1.0 - (alfAmp*alfAmp*va*va)) : 1.0;
   if(1.0 == tMax_ ){ tMax_ = 2*M_PI / (va * std::hypot(kx, ky, kz) ); } // C++17 :)
