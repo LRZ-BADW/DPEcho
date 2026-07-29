@@ -47,15 +47,16 @@ echo "All tests completed!"
 while true; do
     read -p "Do you wish to commit? " yn
     case $yn in
-        [Yy]* ) git commit -a || exit 1 ; break;;
+        [Yy]* ) break;;
         [Nn]* ) exit;;
         * ) echo "Please answer yes or no.";;
     esac
 done
+#        [Yy]* ) git commit -a || exit 1 ; break;;
 
 echo "=== Committing test results ==="
 HASH=$(cd "$SCRIPT_DIR/.." && git rev-parse --short HEAD)
-COMMIT_DIR="$SCRIPT_DIR/../commit/$HASH"
+COMMIT_DIR="../commit/$HASH"
 mkdir -p "$COMMIT_DIR"
 # Move all .dt and .perf files to commit directory
 mv *.dt *.perf "$COMMIT_DIR/" 2>/dev/null || true
