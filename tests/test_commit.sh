@@ -1,45 +1,73 @@
 #!/bin/bash
+# test_commit.sh - Run DPEcho tests and compare dt files with reference
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-COMMIT_HASH="$(git log --oneline | head -n 1 | awk '{print $1}')"
-COMMIT_DIR="commit/${COMMIT_HASH}"
-
-FILTER="${1:-*}"
 
 ./compile_commit.sh
 
+# Find all test parameter files
+echo "=== Setting tests up ==="
+FILTER="${1:-*}"
 NTESTS=$(ls $SCRIPT_DIR/par/*$FILTER*.par 2>/dev/null | wc -l)
 echo "Found $NTESTS tests matching '$FILTER'"
 
-for i in $(ls $SCRIPT_DIR/par/*$FILTER*.par)
-do
-  cd $COMMIT_DIR
-  BNAME=$(basename "$i" .par)
-  ./dpecho $i | tee 1> ${BNAME}.out 2>${BNAME}.perf
-  awk '/Problem::dtUpdate/{for(i=1;i<=NF;i++) if($i=="dt") print $(i+1)}' ${BNAME}.out > ${BNAME}.dt
-  
-#  if [[ ! -f "../ref/${BNAME}.dt" ]]; then
-#    echo "ERROR: Missing reference ${BNAME}.dt"
-#    exit 1
-#  fi
-#  
-#  if [[ ! -f "../ref/${BNAME}.perf" ]]; then
-#    echo "ERROR: Missing reference ${BNAME}.perf"
-#    exit 1
-#  fi
-#  
-#  if ! diff -q ${BNAME}.dt "../ref/${BNAME}.dt" > /dev/null 2>&1; then
-#    echo "FAIL: ${BNAME} dt mismatch"
-#    exit 1
-#  fi
-#  
-#  if ! diff -q ${BNAME}.perf "../ref/${BNAME}.perf" > /dev/null 2>&1; then
-#    echo "FAIL: ${BNAME} perf mismatch"
-#    exit 1
-#  fi
-#  
-#  echo "PASS: ${BNAME}"
-#  cd ..
+cd tmp
+# Check if reference directory exists, if not skip tests without reference
+REF_DIR="../commit/e369a57"
+if [ ! -d "$REF_DIR" ]; then
+    echo "Reference directory $REF_DIR does not exist"
+    exit 1
+fi
+
+# Run tests and compare dt files
+for i in $(ls $SCRIPT_DIR/par/*$FILTER*.par); do
+    BNAME=$(basename "$i" .par)
+    echo -n "- Running test: $BNAME   "
+    # Compare with reference dt file
+    REF_DT_FILE="$REF_DIR/${BNAME}.dt"
+    if [ -f "$REF_DT_FILE" ]; then
+      # Run the test
+      ./dpecho "$i"  1> ${BNAME}.out 2>${BNAME}.perf
+      # Extract dt values
+      awk '/Problem::dtUpdate/{for(j=1;j<=NF;j++) if($j=="dt") print $(j+1)}' "${BNAME}.out" > "${BNAME}.dt"
+      if diff -q "${BNAME}.dt" "$REF_DT_FILE" >/dev/null; then
+        echo "PASSED"
+      else
+        echo "FAILED - dt values differ:"
+        sdiff "${BNAME}.dt" "$REF_DT_FILE"
+        exit 1
+       fi
+    else
+        echo "SKIPPED - no reference dt file"
+    fi
 done
 
-echo "All tests passed"
+echo "All tests completed!"
+
+while true; do
+    read -p "Do you wish to commit? " yn
+    case $yn in
+        [Yy]* ) git commit -a || exit 1 ; break;;
+        [Nn]* ) exit;;
+        * ) echo "Please answer yes or no.";;
+    esac
+done
+
+echo "=== Committing test results ==="
+HASH=$(cd "$SCRIPT_DIR/.." && git rev-parse --short HEAD)
+COMMIT_DIR="$SCRIPT_DIR/../commit/$HASH"
+mkdir -p "$COMMIT_DIR"
+# Move all .dt and .perf files to commit directory
+mv *.dt *.perf "$COMMIT_DIR/" 2>/dev/null || true
+
+# Clean up run folders and .out files from tmp dir
+rm -rf 20??-* *.out 2>/dev/null || true
+echo "Test results stored in $COMMIT_DIR"
+
+# Commit the new test results
+cd "$SCRIPT_DIR/.."
+git add "tests/commit/$NEXT_COMMIT"
+
+git add "$COMMIT_DIR/*"
+git commit --amend --no-edit
+

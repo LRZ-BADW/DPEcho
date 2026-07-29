@@ -1,0 +1,33 @@
+[Device::listDevices] 
+# Available SYCL devices:	1
+ - Device #0:	Intel(R) OpenCL -> Intel(R) Xeon(R) Silver 4316 CPU @ 2.30GHz (8 EUs)
+[Device::printTargetInfo] 
+	Platform Intel(R) OpenCL
+	Hardware Intel(R) Xeon(R) Silver 4316 CPU @ 2.30GHz - CPU 
+	Max Compute Units  : 8
+	Max Work Group Size: 8192
+	Global Memory / GB : 97.2438
+	Local  Memory / kB : 256
+[Domain::Domain] Domain created!
+[Domain::locInfo] Local size (1 1 1) From (-0.5 -0.5 -0.5) To (0.5 0.5 0.5)
+[main] Step# 1, dump# 0, characteristic 26.033
+[main] Step# 2, dump# 0, characteristic 26.2051
+[main] Step# 3, dump# 0, characteristic 26.3659
+[main] Step# 4, dump# 0, characteristic 26.4978
+[main] Step# 5, dump# 0, characteristic 26.6593
+[main] Step# 6, dump# 0, characteristic 26.8266
+[main] Step# 7, dump# 0, characteristic 26.9925
+[main] Step# 8, dump# 0, characteristic 27.1573
+[main] Step# 9, dump# 0, characteristic 27.3156
+[main] Step# 10, dump# 0, characteristic 27.4591
+[main] Step# 11, dump# 0, characteristic 27.5983
+[main] Step# 12, dump# 0, characteristic 27.752
+[main] Step# 13, dump# 0, characteristic 27.9168
+[main] Step# 14, dump# 0, characteristic 28.0983
+[main] Step# 15, dump# 0, characteristic 28.2922
+[main] Step# 16, dump# 0, characteristic 28.491
+[main] Step# 17, dump# 1, characteristic 28.7431
+[main] Step# 18, dump# 1, characteristic 28.9499
+[main] Step# 19, dump# 1, characteristic 29.1561
+[main] Step# 20, dump# 1, characteristic 29.361
+[main] Step# 21, dump# 1, characteristic 29.6336

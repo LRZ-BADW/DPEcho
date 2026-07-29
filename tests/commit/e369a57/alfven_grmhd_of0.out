@@ -1,0 +1,72 @@
+    ____   ____   ______       __           
+   / __ \ / __ \ / ____/_____ / /_   ____ 
+  / / / // /_/ // __/  / ___// __ \ / __ \
+ / /_/ // ____// /___ / /__ / / / // /_/ /  
+/_____//_/    /_____/ \___//_/ /_/ \____/ 
+
+[main] Logger initialized with verbosity=4
+[main] Grid size: Mx: 32, My: 32, Mz: 32
+[Physics::Physics] Physics: GRMHD (fldTot=8)
+[Domain::cartInfo] 3D Domain: 1 1 1
+[Domain::boxInfo] Box  size (1 1 1) From (-0.5 -0.5 -0.5) To (0.5 0.5 0.5)
+[Grid::print]  halos_(4 4 4)   cellsWH(40 40 40)   cellsNH(32 32 32)   Dxyz(0.03125 0.03125 0.03125)  
+[Grid::print]  halos_(2 0 0)   cellsWH(37 32 32)   cellsNH(33 32 32)   Dxyz(0.030303 0.03125 0.03125)  
+[Grid::print]  halos_(0 2 0)   cellsWH(32 37 32)   cellsNH(32 33 32)   Dxyz(0.03125 0.030303 0.03125)  
+[Grid::print]  halos_(0 0 2)   cellsWH(32 32 37)   cellsNH(32 32 33)   Dxyz(0.03125 0.03125 0.030303)  
+[Problem::Alfven] kxyz 6.28319 6.28319 6.28319
+[Problem::Alfven] tMax  is set to 1.51152
+[Problem::Alfven] alp bet gam va 0.785398 0.785398 0.61548 0.381966
+[Problem::Alfven] Initialized Problem Alfven in 4.85437
+[Problem::dtUpdate]  Step # 0: t 0.0102434 i.e. 0.677689% dt 0.0102434 walltime/s 7.87518
+[Problem::dtUpdate]  Step # 1: t 0.0204196 i.e. 1.35093% dt 0.0101761 walltime/s 0.0700534
+[Problem::dtUpdate]  Step # 2: t 0.0305336 i.e. 2.02006% dt 0.0101141 walltime/s 0.0608473
+[Problem::dtUpdate]  Step # 3: t 0.0405974 i.e. 2.68586% dt 0.0100637 walltime/s 0.0724765
+[Problem::dtUpdate]  Step # 4: t 0.0506001 i.e. 3.34763% dt 0.0100028 walltime/s 0.0678612
+[Problem::dtUpdate]  Step # 5: t 0.0605405 i.e. 4.00527% dt 0.00994039 walltime/s 0.0627903
+[Problem::dtUpdate]  Step # 6: t 0.0704198 i.e. 4.65887% dt 0.00987929 walltime/s 0.0600387
+[Problem::dtUpdate]  Step # 7: t 0.0802392 i.e. 5.3085% dt 0.00981933 walltime/s 0.0791684
+[Problem::dtUpdate]  Step # 8: t 0.0900016 i.e. 5.95437% dt 0.00976244 walltime/s 0.0741812
+[Problem::dtUpdate]  Step # 9: t 0.099713 i.e. 6.59686% dt 0.00971143 walltime/s 0.0658116
+[Problem::dtUpdate]  Step # 10: t 0.109375 i.e. 7.23611% dt 0.00966244 walltime/s 0.0694151
+[Problem::dtUpdate]  Step # 11: t 0.118984 i.e. 7.87182% dt 0.00960891 walltime/s 0.0669177
+[Problem::dtUpdate]  Step # 12: t 0.128537 i.e. 8.50378% dt 0.00955219 walltime/s 0.0675146
+[Problem::dtUpdate]  Step # 13: t 0.138027 i.e. 9.13166% dt 0.00949051 walltime/s 0.0767843
+[Problem::dtUpdate]  Step # 14: t 0.147453 i.e. 9.75523% dt 0.00942546 walltime/s 0.0610606
+[Problem::dtUpdate]  Step # 15: t 0.156812 i.e. 10.3745% dt 0.00935968 walltime/s 0.077523
+[Problem::dtUpdate]  Step # 16: t 0.16609 i.e. 10.9882% dt 0.00927758 walltime/s 0.0669689
+[Problem::dtUpdate]  Step # 17: t 0.175301 i.e. 11.5977% dt 0.00921132 walltime/s 0.0676346
+[Problem::dtUpdate]  Step # 18: t 0.184447 i.e. 12.2027% dt 0.00914617 walltime/s 0.0652811
+[Problem::dtUpdate]  Step # 19: t 0.19353 i.e. 12.8036% dt 0.00908234 walltime/s 0.0834071
+[Problem::dtUpdate]  Step # 20: t 0.202528 i.e. 13.399% dt 0.0089988 walltime/s 0.0617974
+
+MPI Load Imbalance
+     	Step	Avg_Time/s	Min_Time_%	  Min_Rank	Max_Time_%	  Max_Rank
+     	0	   4.85437	         0	         0	         0	         0
+     	1	   7.87516	         0	         0	         0	         0
+     	2	 0.0700489	         0	         0	         0	         0
+     	3	 0.0608432	         0	         0	         0	         0
+     	4	 0.0724717	         0	         0	         0	         0
+     	5	 0.0678576	         0	         0	         0	         0
+     	6	 0.0627866	         0	         0	         0	         0
+     	7	  0.060033	         0	         0	         0	         0
+     	8	 0.0791643	         0	         0	         0	         0
+     	9	 0.0741776	         0	         0	         0	         0
+     	10	 0.0658072	         0	         0	         0	         0
+     	11	 0.0694105	         0	         0	         0	         0
+     	12	 0.0669137	         0	         0	         0	         0
+     	13	 0.0675097	         0	         0	         0	         0
+     	14	 0.0767806	         0	         0	         0	         0
+     	15	 0.0610567	         0	         0	         0	         0
+     	16	  0.077519	         0	         0	         0	         0
+     	17	 0.0669642	         0	         0	         0	         0
+     	18	 0.0676307	         0	         0	         0	         0
+     	19	 0.0652765	         0	         0	         0	         0
+     	20	 0.0834032	         0	         0	         0	         0
+     	21	 0.0617939	         0	         0	         0	         0
+
+{
+
+	"rank0": [4.85437, 7.87516, 0.0700489, 0.0608432, 0.0724717, 0.0678576, 0.0627866, 0.060033, 0.0791643, 0.0741776, 0.0658072, 0.0694105, 0.0669137, 0.0675097, 0.0767806, 0.0610567, 0.077519, 0.0669642, 0.0676307, 0.0652765, 0.0834032, 0.0617939]
+}
+
+[void Log::finalize] Total runtime [s]: 9.3725

@@ -37,26 +37,26 @@ Parameters::Parameters(std::string &filename) {
 
 void Parameters::report() {
 
-  Log::cout(5) << TAG << "Parameters that were both loaded and used";
+  Log::cout(10) << TAG << "Parameters that were both loaded and used";
   for (auto &me : parameters) {
     if (numUses[me.first] > 0) {
-      Log::cout(5) << "\n\t\"" << me.first << "\" -> \"" << me.second << "\" (" << numUses[me.first] <<" uses)";
+      Log::cout(10) << "\n\t\"" << me.first << "\" -> \"" << me.second << "\" (" << numUses[me.first] <<" uses)";
     }
-  }; Log::cout(5) << Log::endl;
+  }; Log::cout(10) << Log::endl;
 
-  Log::cout(5) << TAG << "Parameters that were loaded and NOT used" ;
+  Log::cout(10) << TAG << "Parameters that were loaded and NOT used" ;
   for (auto &me : parameters) {
     if (numUses[me.first] == 0) {
-      Log::cout(5) << "\n\t\"" << me.first << "\" -> \"" << me.second << "\"" ;
+      Log::cout(10) << "\n\t\"" << me.first << "\" -> \"" << me.second << "\"" ;
     }
-  }; Log::cout(5) << Log::endl;
+  }; Log::cout(10) << Log::endl;
 
-  Log::cout(5) << TAG << "Parameters that were used but NOT loaded" ;
+  Log::cout(10) << TAG << "Parameters that were used but NOT loaded" ;
   for (auto &me : numUses) {
     if (parameters.find(me.first) == parameters.end()) {
-      Log::cout(5) << "\n\t\"" << me.first << "\" was accessed " << me.second << " times." ;
+      Log::cout(10) << "\n\t\"" << me.first << "\" was accessed " << me.second << " times." ;
     }
-  }; Log::cout(5) << Log::endl;
+  }; Log::cout(10) << Log::endl;
 }
 
 bool Parameters::has(std::string &key) {
