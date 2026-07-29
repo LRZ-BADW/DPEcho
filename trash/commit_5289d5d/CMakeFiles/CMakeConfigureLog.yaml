@@ -1,0 +1,395 @@
+
+---
+events:
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/CMakeDetermineSystem.cmake:233 (message)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      The system is: Linux - 7.0.0-15-generic - x86_64
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/usr/share/cmake-3.28/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/usr/share/cmake-3.28/Modules/CMakeDetermineCXXCompiler.cmake:126 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+      Compiler: /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.out"
+      
+      The CXX compiler identification is IntelLLVM, found in:
+        /home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/3.28.3/CompilerIdCXX/a.out
+      
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/CMakeDetermineCompilerABI.cmake:57 (try_compile)"
+      - "/usr/share/cmake-3.28/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:13 (project)"
+    checks:
+      - "Detecting CXX compiler ABI info"
+    directories:
+      source: "/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96"
+      binary: "/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g -Rno-debug-disables-optimization"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_CXX_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96'
+        
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_af62c/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_af62c.dir/build.make CMakeFiles/cmTC_af62c.dir/build
+        gmake[1]: Entering directory '/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96'
+        Building CXX object CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o
+        /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx   -v -MD -MT CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o -MF CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o.d -o CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-3.28/Modules/CMakeCXXCompilerABI.cpp
+        Intel(R) oneAPI DPC++/C++ Compiler 2026.1.0 (2026.1.0.20260617)
+        Target: x86_64-unknown-linux-gnu
+        Thread model: posix
+        InstalledDir: /opt/intel/oneapi/compiler/2026.1/bin/compiler
+        Configuration file: /opt/intel/oneapi/compiler/2026.1/bin/compiler/../icpx.cfg
+        Found candidate GCC installation: /usr/lib/gcc/x86_64-linux-gnu/13
+        Selected GCC installation: /usr/lib/gcc/x86_64-linux-gnu/13
+        Candidate multilib: .;@m64
+        Selected multilib: .;@m64
+         (in-process)
+         "/opt/intel/oneapi/compiler/2026.1/bin/compiler/clang" -cc1 -triple x86_64-unknown-linux-gnu -O2 -emit-obj -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCXXCompilerABI.cpp -mrelocation-model static -fveclib=SVML -faltmathlib=SVMLAltMathLibrary -mframe-pointer=none -fapprox-func -funsafe-math-optimizations -fno-signed-zeros -mreassociate -freciprocal-math -fdenormal-fp-math=preserve-sign,preserve-sign -ffp-contract=fast-honor-pragmas -fno-rounding-math -complex-range=promoted -mconstructor-aliases -funwind-tables=2 -target-cpu x86-64 -mllvm -x86-enable-unaligned-vector-move=true -tune-cpu generic -debugger-tuning=gdb -fdebug-compilation-dir=/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96 -v -fcoverage-compilation-dir=/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96 -fclang-abi-compat=22 -resource-dir /opt/intel/oneapi/compiler/2026.1/lib/clang/22 -dependency-file CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o.d -MT CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o -sys-header-deps -I /opt/intel/oneapi/mpi/2021.18/include -I/opt/intel/oneapi/umf/1.1/include -I/opt/intel/oneapi/dev-utilities/2026.0/include -c-isystem /opt/intel/oneapi/umf/1.1/include -c-isystem /opt/intel/oneapi/tbb/2023.1/env/../include -c-isystem /opt/intel/oneapi/mpi/2021.18/include -c-isystem /opt/intel/oneapi/mkl/2026.1/include -cxx-isystem /opt/intel/oneapi/umf/1.1/include -cxx-isystem /opt/intel/oneapi/tbb/2023.1/env/../include -cxx-isystem /opt/intel/oneapi/mpi/2021.18/include -cxx-isystem /opt/intel/oneapi/mkl/2026.1/include -cxx-isystem /opt/intel/oneapi/dpl/2022.13/include -internal-isystem /opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/include -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13 -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/x86_64-linux-gnu/c++/13 -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/backward -internal-isystem /opt/intel/oneapi/compiler/2026.1/lib/clang/22/include -internal-isystem /usr/local/include -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/13/../../../../x86_64-linux-gnu/include -internal-externc-isystem /usr/include/x86_64-linux-gnu -internal-externc-isystem /include -internal-externc-isystem /usr/include -fdeprecated-macro -ferror-limit 19 -fgnuc-version=4.2.1 -fskip-odr-check-in-gmf -fcxx-exceptions -fexceptions -vectorize-loops -vectorize-slp -mllvm -disable-hir-generate-mkl-call -mllvm -loopopt=1 -floopopt-pipeline=light -mllvm -intel-abi-compatible=true -fdwarf2-cfi-asm -fintel-compatibility -fintel-libirc-allowed -fintel-libimf-allowed -o CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o -x c++ /usr/share/cmake-3.28/Modules/CMakeCXXCompilerABI.cpp
+        clang -cc1 version 22.1.0 based upon LLVM 22.1.0 default target x86_64-unknown-linux-gnu
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/13/../../../../x86_64-linux-gnu/include"
+        ignoring nonexistent directory "/include"
+        ignoring duplicate directory "/opt/intel/oneapi/umf/1.1/include"
+          as it is a non-system directory that duplicates a system directory
+        ignoring duplicate directory "/opt/intel/oneapi/mpi/2021.18/include"
+          as it is a non-system directory that duplicates a system directory
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /opt/intel/oneapi/dev-utilities/2026.0/include
+         /opt/intel/oneapi/umf/1.1/include
+         /opt/intel/oneapi/tbb/2023.1/env/../include
+         /opt/intel/oneapi/mpi/2021.18/include
+         /opt/intel/oneapi/mkl/2026.1/include
+         /opt/intel/oneapi/dpl/2022.13/include
+         /opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/include
+         /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13
+         /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/x86_64-linux-gnu/c++/13
+         /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/backward
+         /opt/intel/oneapi/compiler/2026.1/lib/clang/22/include
+         /usr/local/include
+         /usr/include/x86_64-linux-gnu
+         /usr/include
+        End of search list.
+        Linking CXX executable cmTC_af62c
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_af62c.dir/link.txt --verbose=1
+        /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx  -v CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_af62c 
+        mpiicpx generated: icpx -v 'CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o' -o 'cmTC_af62c' -I"/opt/intel/oneapi/mpi/2021.18/include" -L"/opt/intel/oneapi/mpi/2021.18/lib" -L"/opt/intel/oneapi/mpi/2021.18/lib" -Xlinker --enable-new-dtags -Xlinker -rpath -Xlinker "/opt/intel/oneapi/mpi/2021.18/lib" -Xlinker -rpath -Xlinker "/opt/intel/oneapi/mpi/2021.18/lib" -lmpicxx -lmpifort -lmpi -ldl -lrt -lpthread
+        Intel(R) oneAPI DPC++/C++ Compiler 2026.1.0 (2026.1.0.20260617)
+        Target: x86_64-unknown-linux-gnu
+        Thread model: posix
+        InstalledDir: /opt/intel/oneapi/compiler/2026.1/bin/compiler
+        Configuration file: /opt/intel/oneapi/compiler/2026.1/bin/compiler/../icpx.cfg
+        Found candidate GCC installation: /usr/lib/gcc/x86_64-linux-gnu/13
+        Selected GCC installation: /usr/lib/gcc/x86_64-linux-gnu/13
+        Candidate multilib: .;@m64
+        Selected multilib: .;@m64
+         "/usr/bin/ld" -z relro --hash-style=gnu --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_af62c /lib/x86_64-linux-gnu/Scrt1.o /lib/x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/13/crtbeginS.o -L/opt/intel/oneapi/mpi/2021.18/lib -L/opt/intel/oneapi/mpi/2021.18/lib -L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib -L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib -L/opt/intel/oneapi/compiler/2026.1/lib/clang/22/lib/x86_64-unknown-linux-gnu -L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib -L/usr/lib/gcc/x86_64-linux-gnu/13 -L/usr/lib/gcc/x86_64-linux-gnu/13/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/lib64 -L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib -L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/lib -L/lib -L/usr/lib -L/opt/intel/oneapi/tcm/1.5/lib -L/opt/intel/oneapi/umf/1.1/lib -L/opt/intel/oneapi/tbb/2023.1/env/../lib/intel64/gcc4.8 -L/opt/intel/oneapi/mpi/2021.18/lib -L/opt/intel/oneapi/mkl/2026.1/lib -L/opt/intel/oneapi/compiler/2026.1/lib CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o --enable-new-dtags -rpath /opt/intel/oneapi/mpi/2021.18/lib -rpath /opt/intel/oneapi/mpi/2021.18/lib -lmpicxx -lmpifort -lmpi -ldl -lrt -lpthread -Bstatic -lsvml -Bdynamic -Bstatic -lirng -Bdynamic -lstdc++ -Bstatic -limf -Bdynamic -lm -lgcc_s -lgcc -Bstatic -lirc -Bdynamic -ldl -lgcc_s -lgcc -lc -lgcc_s -lgcc -Bstatic -lirc_s -Bdynamic /usr/lib/gcc/x86_64-linux-gnu/13/crtendS.o /lib/x86_64-linux-gnu/crtn.o
+        gmake[1]: Leaving directory '/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/CMakeDetermineCompilerABI.cmake:127 (message)"
+      - "/usr/share/cmake-3.28/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      Parsed CXX implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/opt/intel/oneapi/dev-utilities/2026.0/include]
+          add: [/opt/intel/oneapi/umf/1.1/include]
+          add: [/opt/intel/oneapi/tbb/2023.1/env/../include]
+          add: [/opt/intel/oneapi/mpi/2021.18/include]
+          add: [/opt/intel/oneapi/mkl/2026.1/include]
+          add: [/opt/intel/oneapi/dpl/2022.13/include]
+          add: [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/include]
+          add: [/usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13]
+          add: [/usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/x86_64-linux-gnu/c++/13]
+          add: [/usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/backward]
+          add: [/opt/intel/oneapi/compiler/2026.1/lib/clang/22/include]
+          add: [/usr/local/include]
+          add: [/usr/include/x86_64-linux-gnu]
+          add: [/usr/include]
+        end of search list found
+        collapse include dir [/opt/intel/oneapi/dev-utilities/2026.0/include] ==> [/opt/intel/oneapi/dev-utilities/2026.0/include]
+        collapse include dir [/opt/intel/oneapi/umf/1.1/include] ==> [/opt/intel/oneapi/umf/1.1/include]
+        collapse include dir [/opt/intel/oneapi/tbb/2023.1/env/../include] ==> [/opt/intel/oneapi/tbb/2023.1/include]
+        collapse include dir [/opt/intel/oneapi/mpi/2021.18/include] ==> [/opt/intel/oneapi/mpi/2021.18/include]
+        collapse include dir [/opt/intel/oneapi/mkl/2026.1/include] ==> [/opt/intel/oneapi/mkl/2026.1/include]
+        collapse include dir [/opt/intel/oneapi/dpl/2022.13/include] ==> [/opt/intel/oneapi/dpl/2022.13/include]
+        collapse include dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/include] ==> [/opt/intel/oneapi/compiler/2026.1/opt/compiler/include]
+        collapse include dir [/usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13] ==> [/usr/include/c++/13]
+        collapse include dir [/usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/x86_64-linux-gnu/c++/13] ==> [/usr/include/x86_64-linux-gnu/c++/13]
+        collapse include dir [/usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/backward] ==> [/usr/include/c++/13/backward]
+        collapse include dir [/opt/intel/oneapi/compiler/2026.1/lib/clang/22/include] ==> [/opt/intel/oneapi/compiler/2026.1/lib/clang/22/include]
+        collapse include dir [/usr/local/include] ==> [/usr/local/include]
+        collapse include dir [/usr/include/x86_64-linux-gnu] ==> [/usr/include/x86_64-linux-gnu]
+        collapse include dir [/usr/include] ==> [/usr/include]
+        implicit include dirs: [/opt/intel/oneapi/dev-utilities/2026.0/include;/opt/intel/oneapi/umf/1.1/include;/opt/intel/oneapi/tbb/2023.1/include;/opt/intel/oneapi/mpi/2021.18/include;/opt/intel/oneapi/mkl/2026.1/include;/opt/intel/oneapi/dpl/2022.13/include;/opt/intel/oneapi/compiler/2026.1/opt/compiler/include;/usr/include/c++/13;/usr/include/x86_64-linux-gnu/c++/13;/usr/include/c++/13/backward;/opt/intel/oneapi/compiler/2026.1/lib/clang/22/include;/usr/local/include;/usr/include/x86_64-linux-gnu;/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/CMakeDetermineCompilerABI.cmake:159 (message)"
+      - "/usr/share/cmake-3.28/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:13 (project)"
+    message: |
+      Parsed CXX implicit link information:
+        link line regex: [^( *|.*[/\\])(ld|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        ignore line: [Change Dir: '/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96']
+        ignore line: []
+        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_af62c/fast]
+        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_af62c.dir/build.make CMakeFiles/cmTC_af62c.dir/build]
+        ignore line: [gmake[1]: Entering directory '/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96']
+        ignore line: [Building CXX object CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o]
+        ignore line: [/opt/intel/oneapi/mpi/2021.18/bin/mpiicpx   -v -MD -MT CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o -MF CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o.d -o CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-3.28/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [Intel(R) oneAPI DPC++/C++ Compiler 2026.1.0 (2026.1.0.20260617)]
+        ignore line: [Target: x86_64-unknown-linux-gnu]
+        ignore line: [Thread model: posix]
+        ignore line: [InstalledDir: /opt/intel/oneapi/compiler/2026.1/bin/compiler]
+        ignore line: [Configuration file: /opt/intel/oneapi/compiler/2026.1/bin/compiler/../icpx.cfg]
+        ignore line: [Found candidate GCC installation: /usr/lib/gcc/x86_64-linux-gnu/13]
+        ignore line: [Selected GCC installation: /usr/lib/gcc/x86_64-linux-gnu/13]
+        ignore line: [Candidate multilib: .]
+        ignore line: [@m64]
+        ignore line: [Selected multilib: .]
+        ignore line: [@m64]
+        ignore line: [ (in-process)]
+        ignore line: [ "/opt/intel/oneapi/compiler/2026.1/bin/compiler/clang" -cc1 -triple x86_64-unknown-linux-gnu -O2 -emit-obj -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name CMakeCXXCompilerABI.cpp -mrelocation-model static -fveclib=SVML -faltmathlib=SVMLAltMathLibrary -mframe-pointer=none -fapprox-func -funsafe-math-optimizations -fno-signed-zeros -mreassociate -freciprocal-math -fdenormal-fp-math=preserve-sign preserve-sign -ffp-contract=fast-honor-pragmas -fno-rounding-math -complex-range=promoted -mconstructor-aliases -funwind-tables=2 -target-cpu x86-64 -mllvm -x86-enable-unaligned-vector-move=true -tune-cpu generic -debugger-tuning=gdb -fdebug-compilation-dir=/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96 -v -fcoverage-compilation-dir=/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-ywct96 -fclang-abi-compat=22 -resource-dir /opt/intel/oneapi/compiler/2026.1/lib/clang/22 -dependency-file CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o.d -MT CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o -sys-header-deps -I /opt/intel/oneapi/mpi/2021.18/include -I/opt/intel/oneapi/umf/1.1/include -I/opt/intel/oneapi/dev-utilities/2026.0/include -c-isystem /opt/intel/oneapi/umf/1.1/include -c-isystem /opt/intel/oneapi/tbb/2023.1/env/../include -c-isystem /opt/intel/oneapi/mpi/2021.18/include -c-isystem /opt/intel/oneapi/mkl/2026.1/include -cxx-isystem /opt/intel/oneapi/umf/1.1/include -cxx-isystem /opt/intel/oneapi/tbb/2023.1/env/../include -cxx-isystem /opt/intel/oneapi/mpi/2021.18/include -cxx-isystem /opt/intel/oneapi/mkl/2026.1/include -cxx-isystem /opt/intel/oneapi/dpl/2022.13/include -internal-isystem /opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/include -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13 -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/x86_64-linux-gnu/c++/13 -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/backward -internal-isystem /opt/intel/oneapi/compiler/2026.1/lib/clang/22/include -internal-isystem /usr/local/include -internal-isystem /usr/lib/gcc/x86_64-linux-gnu/13/../../../../x86_64-linux-gnu/include -internal-externc-isystem /usr/include/x86_64-linux-gnu -internal-externc-isystem /include -internal-externc-isystem /usr/include -fdeprecated-macro -ferror-limit 19 -fgnuc-version=4.2.1 -fskip-odr-check-in-gmf -fcxx-exceptions -fexceptions -vectorize-loops -vectorize-slp -mllvm -disable-hir-generate-mkl-call -mllvm -loopopt=1 -floopopt-pipeline=light -mllvm -intel-abi-compatible=true -fdwarf2-cfi-asm -fintel-compatibility -fintel-libirc-allowed -fintel-libimf-allowed -o CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o -x c++ /usr/share/cmake-3.28/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [clang -cc1 version 22.1.0 based upon LLVM 22.1.0 default target x86_64-unknown-linux-gnu]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/13/../../../../x86_64-linux-gnu/include"]
+        ignore line: [ignoring nonexistent directory "/include"]
+        ignore line: [ignoring duplicate directory "/opt/intel/oneapi/umf/1.1/include"]
+        ignore line: [  as it is a non-system directory that duplicates a system directory]
+        ignore line: [ignoring duplicate directory "/opt/intel/oneapi/mpi/2021.18/include"]
+        ignore line: [  as it is a non-system directory that duplicates a system directory]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /opt/intel/oneapi/dev-utilities/2026.0/include]
+        ignore line: [ /opt/intel/oneapi/umf/1.1/include]
+        ignore line: [ /opt/intel/oneapi/tbb/2023.1/env/../include]
+        ignore line: [ /opt/intel/oneapi/mpi/2021.18/include]
+        ignore line: [ /opt/intel/oneapi/mkl/2026.1/include]
+        ignore line: [ /opt/intel/oneapi/dpl/2022.13/include]
+        ignore line: [ /opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/include]
+        ignore line: [ /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13]
+        ignore line: [ /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/x86_64-linux-gnu/c++/13]
+        ignore line: [ /usr/lib/gcc/x86_64-linux-gnu/13/../../../../include/c++/13/backward]
+        ignore line: [ /opt/intel/oneapi/compiler/2026.1/lib/clang/22/include]
+        ignore line: [ /usr/local/include]
+        ignore line: [ /usr/include/x86_64-linux-gnu]
+        ignore line: [ /usr/include]
+        ignore line: [End of search list.]
+        ignore line: [Linking CXX executable cmTC_af62c]
+        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_af62c.dir/link.txt --verbose=1]
+        ignore line: [/opt/intel/oneapi/mpi/2021.18/bin/mpiicpx  -v CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_af62c ]
+        ignore line: [mpiicpx generated: icpx -v 'CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o' -o 'cmTC_af62c' -I"/opt/intel/oneapi/mpi/2021.18/include" -L"/opt/intel/oneapi/mpi/2021.18/lib" -L"/opt/intel/oneapi/mpi/2021.18/lib" -Xlinker --enable-new-dtags -Xlinker -rpath -Xlinker "/opt/intel/oneapi/mpi/2021.18/lib" -Xlinker -rpath -Xlinker "/opt/intel/oneapi/mpi/2021.18/lib" -lmpicxx -lmpifort -lmpi -ldl -lrt -lpthread]
+        ignore line: [Intel(R) oneAPI DPC++/C++ Compiler 2026.1.0 (2026.1.0.20260617)]
+        ignore line: [Target: x86_64-unknown-linux-gnu]
+        ignore line: [Thread model: posix]
+        ignore line: [InstalledDir: /opt/intel/oneapi/compiler/2026.1/bin/compiler]
+        ignore line: [Configuration file: /opt/intel/oneapi/compiler/2026.1/bin/compiler/../icpx.cfg]
+        ignore line: [Found candidate GCC installation: /usr/lib/gcc/x86_64-linux-gnu/13]
+        ignore line: [Selected GCC installation: /usr/lib/gcc/x86_64-linux-gnu/13]
+        ignore line: [Candidate multilib: .]
+        ignore line: [@m64]
+        ignore line: [Selected multilib: .]
+        ignore line: [@m64]
+        link line: [ "/usr/bin/ld" -z relro --hash-style=gnu --eh-frame-hdr -m elf_x86_64 -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o cmTC_af62c /lib/x86_64-linux-gnu/Scrt1.o /lib/x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/13/crtbeginS.o -L/opt/intel/oneapi/mpi/2021.18/lib -L/opt/intel/oneapi/mpi/2021.18/lib -L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib -L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib -L/opt/intel/oneapi/compiler/2026.1/lib/clang/22/lib/x86_64-unknown-linux-gnu -L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib -L/usr/lib/gcc/x86_64-linux-gnu/13 -L/usr/lib/gcc/x86_64-linux-gnu/13/../../../../lib64 -L/lib/x86_64-linux-gnu -L/lib/../lib64 -L/usr/lib/x86_64-linux-gnu -L/usr/lib64 -L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib -L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/lib -L/lib -L/usr/lib -L/opt/intel/oneapi/tcm/1.5/lib -L/opt/intel/oneapi/umf/1.1/lib -L/opt/intel/oneapi/tbb/2023.1/env/../lib/intel64/gcc4.8 -L/opt/intel/oneapi/mpi/2021.18/lib -L/opt/intel/oneapi/mkl/2026.1/lib -L/opt/intel/oneapi/compiler/2026.1/lib CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o --enable-new-dtags -rpath /opt/intel/oneapi/mpi/2021.18/lib -rpath /opt/intel/oneapi/mpi/2021.18/lib -lmpicxx -lmpifort -lmpi -ldl -lrt -lpthread -Bstatic -lsvml -Bdynamic -Bstatic -lirng -Bdynamic -lstdc++ -Bstatic -limf -Bdynamic -lm -lgcc_s -lgcc -Bstatic -lirc -Bdynamic -ldl -lgcc_s -lgcc -lc -lgcc_s -lgcc -Bstatic -lirc_s -Bdynamic /usr/lib/gcc/x86_64-linux-gnu/13/crtendS.o /lib/x86_64-linux-gnu/crtn.o]
+          arg [/usr/bin/ld] ==> ignore
+          arg [-zrelro] ==> ignore
+          arg [--hash-style=gnu] ==> ignore
+          arg [--eh-frame-hdr] ==> ignore
+          arg [-m] ==> ignore
+          arg [elf_x86_64] ==> ignore
+          arg [-dynamic-linker] ==> ignore
+          arg [/lib64/ld-linux-x86-64.so.2] ==> ignore
+          arg [-o] ==> ignore
+          arg [cmTC_af62c] ==> ignore
+          arg [/lib/x86_64-linux-gnu/Scrt1.o] ==> obj [/lib/x86_64-linux-gnu/Scrt1.o]
+          arg [/lib/x86_64-linux-gnu/crti.o] ==> obj [/lib/x86_64-linux-gnu/crti.o]
+          arg [/usr/lib/gcc/x86_64-linux-gnu/13/crtbeginS.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/13/crtbeginS.o]
+          arg [-L/opt/intel/oneapi/mpi/2021.18/lib] ==> dir [/opt/intel/oneapi/mpi/2021.18/lib]
+          arg [-L/opt/intel/oneapi/mpi/2021.18/lib] ==> dir [/opt/intel/oneapi/mpi/2021.18/lib]
+          arg [-L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib] ==> dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib]
+          arg [-L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib] ==> dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib]
+          arg [-L/opt/intel/oneapi/compiler/2026.1/lib/clang/22/lib/x86_64-unknown-linux-gnu] ==> dir [/opt/intel/oneapi/compiler/2026.1/lib/clang/22/lib/x86_64-unknown-linux-gnu]
+          arg [-L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib] ==> dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib]
+          arg [-L/usr/lib/gcc/x86_64-linux-gnu/13] ==> dir [/usr/lib/gcc/x86_64-linux-gnu/13]
+          arg [-L/usr/lib/gcc/x86_64-linux-gnu/13/../../../../lib64] ==> dir [/usr/lib/gcc/x86_64-linux-gnu/13/../../../../lib64]
+          arg [-L/lib/x86_64-linux-gnu] ==> dir [/lib/x86_64-linux-gnu]
+          arg [-L/lib/../lib64] ==> dir [/lib/../lib64]
+          arg [-L/usr/lib/x86_64-linux-gnu] ==> dir [/usr/lib/x86_64-linux-gnu]
+          arg [-L/usr/lib64] ==> dir [/usr/lib64]
+          arg [-L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib] ==> dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib]
+          arg [-L/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/lib] ==> dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/lib]
+          arg [-L/lib] ==> dir [/lib]
+          arg [-L/usr/lib] ==> dir [/usr/lib]
+          arg [-L/opt/intel/oneapi/tcm/1.5/lib] ==> dir [/opt/intel/oneapi/tcm/1.5/lib]
+          arg [-L/opt/intel/oneapi/umf/1.1/lib] ==> dir [/opt/intel/oneapi/umf/1.1/lib]
+          arg [-L/opt/intel/oneapi/tbb/2023.1/env/../lib/intel64/gcc4.8] ==> dir [/opt/intel/oneapi/tbb/2023.1/env/../lib/intel64/gcc4.8]
+          arg [-L/opt/intel/oneapi/mpi/2021.18/lib] ==> dir [/opt/intel/oneapi/mpi/2021.18/lib]
+          arg [-L/opt/intel/oneapi/mkl/2026.1/lib] ==> dir [/opt/intel/oneapi/mkl/2026.1/lib]
+          arg [-L/opt/intel/oneapi/compiler/2026.1/lib] ==> dir [/opt/intel/oneapi/compiler/2026.1/lib]
+          arg [CMakeFiles/cmTC_af62c.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
+          arg [--enable-new-dtags] ==> ignore
+          arg [-rpath] ==> ignore
+          arg [/opt/intel/oneapi/mpi/2021.18/lib] ==> ignore
+          arg [-rpath] ==> ignore
+          arg [/opt/intel/oneapi/mpi/2021.18/lib] ==> ignore
+          arg [-lmpicxx] ==> lib [mpicxx]
+          arg [-lmpifort] ==> lib [mpifort]
+          arg [-lmpi] ==> lib [mpi]
+          arg [-ldl] ==> lib [dl]
+          arg [-lrt] ==> lib [rt]
+          arg [-lpthread] ==> lib [pthread]
+          arg [-Bstatic] ==> search static
+          arg [-lsvml] ==> lib [svml]
+          arg [-Bdynamic] ==> search dynamic
+          arg [-Bstatic] ==> search static
+          arg [-lirng] ==> lib [irng]
+          arg [-Bdynamic] ==> search dynamic
+          arg [-lstdc++] ==> lib [stdc++]
+          arg [-Bstatic] ==> search static
+          arg [-limf] ==> lib [imf]
+          arg [-Bdynamic] ==> search dynamic
+          arg [-lm] ==> lib [m]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [-Bstatic] ==> search static
+          arg [-lirc] ==> lib [irc]
+          arg [-Bdynamic] ==> search dynamic
+          arg [-ldl] ==> lib [dl]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [-lc] ==> lib [c]
+          arg [-lgcc_s] ==> lib [gcc_s]
+          arg [-lgcc] ==> lib [gcc]
+          arg [-Bstatic] ==> search static
+          arg [-lirc_s] ==> lib [irc_s]
+          arg [-Bdynamic] ==> search dynamic
+          arg [/usr/lib/gcc/x86_64-linux-gnu/13/crtendS.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/13/crtendS.o]
+          arg [/lib/x86_64-linux-gnu/crtn.o] ==> obj [/lib/x86_64-linux-gnu/crtn.o]
+        collapse library dir [/opt/intel/oneapi/mpi/2021.18/lib] ==> [/opt/intel/oneapi/mpi/2021.18/lib]
+        collapse library dir [/opt/intel/oneapi/mpi/2021.18/lib] ==> [/opt/intel/oneapi/mpi/2021.18/lib]
+        collapse library dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib] ==> [/opt/intel/oneapi/compiler/2026.1/lib]
+        collapse library dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib] ==> [/opt/intel/oneapi/compiler/2026.1/lib]
+        collapse library dir [/opt/intel/oneapi/compiler/2026.1/lib/clang/22/lib/x86_64-unknown-linux-gnu] ==> [/opt/intel/oneapi/compiler/2026.1/lib/clang/22/lib/x86_64-unknown-linux-gnu]
+        collapse library dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib] ==> [/opt/intel/oneapi/compiler/2026.1/lib]
+        collapse library dir [/usr/lib/gcc/x86_64-linux-gnu/13] ==> [/usr/lib/gcc/x86_64-linux-gnu/13]
+        collapse library dir [/usr/lib/gcc/x86_64-linux-gnu/13/../../../../lib64] ==> [/usr/lib64]
+        collapse library dir [/lib/x86_64-linux-gnu] ==> [/lib/x86_64-linux-gnu]
+        collapse library dir [/lib/../lib64] ==> [/lib64]
+        collapse library dir [/usr/lib/x86_64-linux-gnu] ==> [/usr/lib/x86_64-linux-gnu]
+        collapse library dir [/usr/lib64] ==> [/usr/lib64]
+        collapse library dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../lib] ==> [/opt/intel/oneapi/compiler/2026.1/lib]
+        collapse library dir [/opt/intel/oneapi/compiler/2026.1/bin/compiler/../../opt/compiler/lib] ==> [/opt/intel/oneapi/compiler/2026.1/opt/compiler/lib]
+        collapse library dir [/lib] ==> [/lib]
+        collapse library dir [/usr/lib] ==> [/usr/lib]
+        collapse library dir [/opt/intel/oneapi/tcm/1.5/lib] ==> [/opt/intel/oneapi/tcm/1.5/lib]
+        collapse library dir [/opt/intel/oneapi/umf/1.1/lib] ==> [/opt/intel/oneapi/umf/1.1/lib]
+        collapse library dir [/opt/intel/oneapi/tbb/2023.1/env/../lib/intel64/gcc4.8] ==> [/opt/intel/oneapi/tbb/2023.1/lib/intel64/gcc4.8]
+        collapse library dir [/opt/intel/oneapi/mpi/2021.18/lib] ==> [/opt/intel/oneapi/mpi/2021.18/lib]
+        collapse library dir [/opt/intel/oneapi/mkl/2026.1/lib] ==> [/opt/intel/oneapi/mkl/2026.1/lib]
+        collapse library dir [/opt/intel/oneapi/compiler/2026.1/lib] ==> [/opt/intel/oneapi/compiler/2026.1/lib]
+        implicit libs: [mpicxx;mpifort;mpi;dl;rt;pthread;svml;irng;stdc++;imf;m;gcc_s;gcc;irc;dl;gcc_s;gcc;c;gcc_s;gcc;irc_s]
+        implicit objs: [/lib/x86_64-linux-gnu/Scrt1.o;/lib/x86_64-linux-gnu/crti.o;/usr/lib/gcc/x86_64-linux-gnu/13/crtbeginS.o;/usr/lib/gcc/x86_64-linux-gnu/13/crtendS.o;/lib/x86_64-linux-gnu/crtn.o]
+        implicit dirs: [/opt/intel/oneapi/mpi/2021.18/lib;/opt/intel/oneapi/compiler/2026.1/lib;/opt/intel/oneapi/compiler/2026.1/lib/clang/22/lib/x86_64-unknown-linux-gnu;/usr/lib/gcc/x86_64-linux-gnu/13;/usr/lib64;/lib/x86_64-linux-gnu;/lib64;/usr/lib/x86_64-linux-gnu;/opt/intel/oneapi/compiler/2026.1/opt/compiler/lib;/lib;/usr/lib;/opt/intel/oneapi/tcm/1.5/lib;/opt/intel/oneapi/umf/1.1/lib;/opt/intel/oneapi/tbb/2023.1/lib/intel64/gcc4.8;/opt/intel/oneapi/mkl/2026.1/lib]
+        implicit fwks: []
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/CheckLanguage.cmake:139 (message)"
+      - "CMakeLists.txt:44 (check_language)"
+    checks:
+      - "Looking for a CUDA compiler"
+    message: |
+      Looking for a CUDA compiler failed with the following output:
+      CMake Error at /usr/share/cmake-3.28/Modules/Internal/CMakeCUDAFindToolkit.cmake:104 (message):
+        Failed to find nvcc.
+      
+        Compiler requires the CUDA toolkit.  Please set the CUDAToolkit_ROOT
+        variable.
+      Call Stack (most recent call first):
+        /usr/share/cmake-3.28/Modules/CMakeDetermineCUDACompiler.cmake:89 (cmake_cuda_find_toolkit)
+        CMakeLists.txt:2 (project)
+      
+      
+      -- Configuring incomplete, errors occurred!
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/CheckLanguage.cmake:139 (message)"
+      - "CMakeLists.txt:45 (check_language)"
+    checks:
+      - "Looking for a HIP compiler"
+    message: |
+      Looking for a HIP compiler failed with the following output:
+      -- The HIP compiler identification is unknown
+      CMake Error at /usr/share/cmake-3.28/Modules/CMakeDetermineHIPCompiler.cmake:174 (message):
+        Failed to find ROCm root directory.
+      Call Stack (most recent call first):
+        CMakeLists.txt:2 (project)
+      
+      
+      -- Configuring incomplete, errors occurred!
+      
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/FindMPI.cmake:1278 (try_compile)"
+      - "/usr/share/cmake-3.28/Modules/FindMPI.cmake:1672 (_MPI_try_staged_settings)"
+      - "CMakeLists.txt:103 (find_package)"
+    description: "The MPI test test_mpi for CXX in mode MPICXX"
+    directories:
+      source: "/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-h9N1UP"
+      binary: "/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-h9N1UP"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g -Rno-debug-disables-optimization"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/jovyan/DPEcho/cmake/modules"
+    buildResult:
+      variable: "MPI_RESULT_CXX_test_mpi_MPICXX"
+      cached: true
+      stdout: |
+        Change Dir: '/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-h9N1UP'
+        
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_17703/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_17703.dir/build.make CMakeFiles/cmTC_17703.dir/build
+        gmake[1]: Entering directory '/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-h9N1UP'
+        Building CXX object CMakeFiles/cmTC_17703.dir/test_mpi.cpp.o
+        /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx    -MD -MT CMakeFiles/cmTC_17703.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_17703.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_17703.dir/test_mpi.cpp.o -c /home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-h9N1UP/test_mpi.cpp
+        Linking CXX executable cmTC_17703
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_17703.dir/link.txt --verbose=1
+        /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx CMakeFiles/cmTC_17703.dir/test_mpi.cpp.o -o cmTC_17703 
+        gmake[1]: Leaving directory '/home/jovyan/DPEcho/commit_5289d5d/CMakeFiles/CMakeScratch/TryCompile-h9N1UP'
+        
+      exitCode: 0
+...
