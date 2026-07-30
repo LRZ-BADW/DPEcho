@@ -62,7 +62,7 @@ CXX=<chosenCompilerName> ccmake ..
 make
 ```
 Simulation parameters such as order of derivation, type of simulation (MHD or GR-MHD) or type of execution device may be edited in the CCMake command line UI. Other parameters may be set at runtime (check your runtime documentation).
-An example parameter file is shown at [the example parameter file alfven.par](examples/alfven.par).
+Parameter files are located in `samplePar/`.
 As a default behavior, DPEcho expects a parameter file called **dpecho.par** in its working directory.
 The path to an alternative file may also be passed as a commandline argument.
 
@@ -74,12 +74,7 @@ The path to an alternative file may also be passed as a commandline argument.
   - `deviceOffset` (select first device to use; check logs after dummy run for exact order)
   - `deviceCount` (how many devices DPEcho will distribute among its MPI ranks; dummy parameter for non-MPI binaries)
 
-## Energy Meter
-DPEcho comes with an experimental energy meter, in `tb-timer.hpp`, using an extra process through the boost library.
-In order to activate it:
-- Compile DPEcho with ENERGY_METER on
-- Copy the scritp `tools/deltaEnergy.sh` in the run folder
-- Edit the script to use your own power meter. Provided examples include nvidia-smi, rocm-smi and xpu-smi for GPUs, and likwid, perf or EAR for CPUs.
+Energy measurement is now done via `tb-timer` instrumented with the p3em repository (see https://github.com/p3em/p3em).
 
 ## Known Issues
 
