@@ -26,9 +26,23 @@ done
 
 echo "All tests completed!"
 
-# Move all .dt and .perf files to commit directory based on current HEAD
-HASH=$(cd "$SCRIPT_DIR/.." && git rev-parse --short HEAD)
-COMMIT_DIR="../commit/$HASH"
+# Move all .dt and .perf files to commit directory using first 4 words of the current commit message, sanitized and suffixed with "_tmp"
+# Get the latest commit subject
+MSG=$(git -C "$SCRIPT_DIR/.." log -1 --pretty=%s HEAD)
+# Build a name from up to four words, keep only alphanumerics
+NAME=$(echo "$MSG" | awk '{for(i=1;i<=4;i++) printf "%s",$i}' | tr -cd '[:alnum:]')
+# Fallback to short hash if name is empty
+[ -z "$NAME" ] && NAME=$(git -C "$SCRIPT_DIR/.." rev-parse --short HEAD)
+# Append the required suffix
+BASE="${NAME}_tmp"
+# Ensure the directory does not already exist
+TARGET="$BASE"
+idx=1
+while [ -e "../commit/$TARGET" ]; do
+    TARGET="${BASE}_$idx"
+    idx=$((idx+1))
+done
+COMMIT_DIR="../commit/$TARGET"
 mkdir -p "$COMMIT_DIR"
 mv *.dt *.perf "$COMMIT_DIR/" 2>/dev/null || true
 
