@@ -1545,3 +1545,111 @@ events:
         
       exitCode: 0
 ...
+
+---
+events:
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/FindMPI.cmake:1278 (try_compile)"
+      - "/usr/share/cmake-3.28/Modules/FindMPI.cmake:1672 (_MPI_try_staged_settings)"
+      - "CMakeLists.txt:103 (find_package)"
+    description: "The MPI test test_mpi for CXX in mode MPICXX"
+    directories:
+      source: "/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-tX273g"
+      binary: "/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-tX273g"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g -Rno-debug-disables-optimization"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/jovyan/DPEcho/cmake/modules"
+    buildResult:
+      variable: "MPI_RESULT_CXX_test_mpi_MPICXX"
+      cached: true
+      stdout: |
+        Change Dir: '/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-tX273g'
+        
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_ed0e2/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_ed0e2.dir/build.make CMakeFiles/cmTC_ed0e2.dir/build
+        gmake[1]: Entering directory '/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-tX273g'
+        Building CXX object CMakeFiles/cmTC_ed0e2.dir/test_mpi.cpp.o
+        /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx    -MD -MT CMakeFiles/cmTC_ed0e2.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_ed0e2.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_ed0e2.dir/test_mpi.cpp.o -c /home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-tX273g/test_mpi.cpp
+        Linking CXX executable cmTC_ed0e2
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_ed0e2.dir/link.txt --verbose=1
+        /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx CMakeFiles/cmTC_ed0e2.dir/test_mpi.cpp.o -o cmTC_ed0e2 
+        gmake[1]: Leaving directory '/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-tX273g'
+        
+      exitCode: 0
+...
+
+---
+events:
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/FindMPI.cmake:1278 (try_compile)"
+      - "/usr/share/cmake-3.28/Modules/FindMPI.cmake:1672 (_MPI_try_staged_settings)"
+      - "CMakeLists.txt:103 (find_package)"
+    description: "The MPI test test_mpi for CXX in mode MPICXX"
+    directories:
+      source: "/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-vQ5TLr"
+      binary: "/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-vQ5TLr"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g -Rno-debug-disables-optimization"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/jovyan/DPEcho/cmake/modules"
+    buildResult:
+      variable: "MPI_RESULT_CXX_test_mpi_MPICXX"
+      cached: true
+      stdout: |
+        Change Dir: '/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-vQ5TLr'
+        
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_49db7/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_49db7.dir/build.make CMakeFiles/cmTC_49db7.dir/build
+        gmake[1]: Entering directory '/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-vQ5TLr'
+        Building CXX object CMakeFiles/cmTC_49db7.dir/test_mpi.cpp.o
+        /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx    -MD -MT CMakeFiles/cmTC_49db7.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_49db7.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_49db7.dir/test_mpi.cpp.o -c /home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-vQ5TLr/test_mpi.cpp
+        Linking CXX executable cmTC_49db7
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_49db7.dir/link.txt --verbose=1
+        /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx CMakeFiles/cmTC_49db7.dir/test_mpi.cpp.o -o cmTC_49db7 
+        gmake[1]: Leaving directory '/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-vQ5TLr'
+        
+      exitCode: 0
+...
+
+---
+events:
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-3.28/Modules/FindMPI.cmake:1278 (try_compile)"
+      - "/usr/share/cmake-3.28/Modules/FindMPI.cmake:1672 (_MPI_try_staged_settings)"
+      - "CMakeLists.txt:103 (find_package)"
+    description: "The MPI test test_mpi for CXX in mode MPICXX"
+    directories:
+      source: "/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-RNGel2"
+      binary: "/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-RNGel2"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g -Rno-debug-disables-optimization"
+      CMAKE_EXE_LINKER_FLAGS: ""
+      CMAKE_MODULE_PATH: "/home/jovyan/DPEcho/cmake/modules"
+    buildResult:
+      variable: "MPI_RESULT_CXX_test_mpi_MPICXX"
+      cached: true
+      stdout: |
+        Change Dir: '/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-RNGel2'
+        
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_1c0f1/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_1c0f1.dir/build.make CMakeFiles/cmTC_1c0f1.dir/build
+        gmake[1]: Entering directory '/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-RNGel2'
+        Building CXX object CMakeFiles/cmTC_1c0f1.dir/test_mpi.cpp.o
+        /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx    -MD -MT CMakeFiles/cmTC_1c0f1.dir/test_mpi.cpp.o -MF CMakeFiles/cmTC_1c0f1.dir/test_mpi.cpp.o.d -o CMakeFiles/cmTC_1c0f1.dir/test_mpi.cpp.o -c /home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-RNGel2/test_mpi.cpp
+        Linking CXX executable cmTC_1c0f1
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_1c0f1.dir/link.txt --verbose=1
+        /opt/intel/oneapi/mpi/2021.18/bin/mpiicpx CMakeFiles/cmTC_1c0f1.dir/test_mpi.cpp.o -o cmTC_1c0f1 
+        gmake[1]: Leaving directory '/home/jovyan/DPEcho/tests/tmp/CMakeFiles/CMakeScratch/TryCompile-RNGel2'
+        
+      exitCode: 0
+...

@@ -15,7 +15,7 @@ Hx 4
 Hy 4
 Hz 4
 //- Problem
-physics HD
+physics GRMHD
 nStep 201
 tMax 1.0
 tOut 1.0
