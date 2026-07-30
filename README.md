@@ -38,6 +38,12 @@ After cloning, enable the pre-commit hook that runs GRMHD tests on source change
 ./setup.sh
 ```
 
+## Quick start
+
+- **`compile_commit.sh`** – builds the DPEcho executable in one step.
+- **`test_commit.sh`** – runs the test suite, compares results against the reference data, and *offers* to commit the newly generated `.dt` and `.perf` files (you decide whether to create the commit).
+- **`run_commit.sh`** – generates reference `.dt` and `.perf` files for the current commit without performing any correctness checks, storing them in a uniquely‑named folder.
+
 ## Building
 
 make sure that your SYCL compiler and CMake are in available in your environment.
