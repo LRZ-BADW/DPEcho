@@ -67,9 +67,17 @@ done
 #        [Yy]* ) git commit -a || exit 1 ; break;;
 
 echo "=== Committing test results ==="
-msg=$(cd "$SCRIPT_DIR/.." && git log -1 --pretty=%B)
-name=$(echo "$msg" | awk '{for(i=1;i<=4;i++) printf "%s",$i}' | tr -cd '[:alnum:]')
-COMMIT_DIR="../commit/$name"
+MSG=$(git -C "$SCRIPT_DIR/.." log -1 --pretty=%s HEAD)
+NAME=$(echo "$MSG" | awk '{for(i=1;i<=4;i++) printf "%s",$i}' | tr -cd '[:alnum:]')
+[ -z "$NAME" ] && NAME=$(git -C "$SCRIPT_DIR/.." rev-parse --short HEAD)
+BASE="$NAME"
+TARGET="$BASE"
+idx=1
+while [ -e "../commit/$TARGET" ]; do
+    TARGET="${BASE}_$idx"
+    idx=$((idx+1))
+    done
+COMMIT_DIR="../commit/$TARGET"
 mkdir -p "$COMMIT_DIR"
 # Move all .dt and .perf files to commit directory
 mv *.dt *.perf "$COMMIT_DIR/" 2>/dev/null || true
